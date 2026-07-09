@@ -119,6 +119,22 @@ Column ikut Sheet sebenar (KNM_Japan_2026_Master). App map ikut **nama header**,
 
 ---
 
+## 6a. TOOLS BARU (skrin More)
+
+- **Waktu solat (ikut lokasi)** — auto ikut koordinat stop semasa, fetch dari Aladhan API (Muslim World League), cache offline. Perlu internet kali pertama tiap lokasi/hari.
+- **Tukaran ¥ ⇄ RM** — converter built-in dua hala. Kadar diambil dari Info (`Exchange rate`) — edit situ untuk ubah.
+- **Check halal & masjid** — link Halal Gourmet Japan, Halal Navi, + Maps (restoran halal / masjid berdekatan).
+- **Kecemasan** — Polis 110, Ambulans 119, Kedutaan Malaysia (tel + peta), Hospital berdekatan. Boleh **tambah/edit/buang** kontak (embassy/takaful/hospital) — Admin je. Kontak tambahan disimpan dalam tab **Info** (category `Emergency`).
+
+### Mode pengangkutan (drive / train / taxi)
+Butang "Direction" bukak Google Maps ikut mod:
+- **train** → mod transit, **drive/taxi** → mod driving, **walk** → walking.
+- Default ikut kawasan: Kawaguchiko/Fuji = drive, Kyoto = taxi, Osaka = train, Tokyo & lain = train.
+- Nak override satu-satu stop: tambah kolum **`transport`** dalam tab Itinerary, isi `drive`/`train`/`taxi`/`walk`. Edit terus dalam app (borang edit stop auto tunjuk field baru).
+- Stop mod **drive** dapat butang tambahan **"Parking berdekatan"**.
+
+---
+
 ## 6. CARA UPDATE DATA (2 jalan)
 
 **Jalan 1 — dalam app (senang):**

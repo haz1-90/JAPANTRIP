@@ -281,6 +281,7 @@ nav{position:fixed;bottom:0;left:0;right:0;max-width:520px;margin:0 auto;
   background:var(--accent-soft);color:var(--navy);vertical-align:middle;}
 .adj.tight{background:var(--redbg);color:var(--red);}
 .adj.fixed{background:var(--greenbg);color:var(--green);}
+.link-row .rv{font-weight:800;color:var(--navy2);font-size:15px;}
 
 @media (prefers-reduced-motion: reduce){
   *{animation-duration:.001ms!important;animation-iteration-count:1!important;transition-duration:.001ms!important;}
@@ -608,6 +609,7 @@ function renderToday(){
   // next stop = first non-done
   let next=todays[0]||it[0];
   const ico=TYPE_ICON[next.type]||"ti-map-pin",col=TYPE_COLOR[next.type]||"#185FA5";
+  const nmode=stopMode(next),nmeta=MODE_META[nmode];
   let statusPill="";
   // reminders for the day of 'next'
   const dayNum=next.day;
@@ -635,10 +637,11 @@ function renderToday(){
       <div style="font-size:14px;color:var(--muted);margin-bottom:2px;">${esc(next.activity)}</div>
       ${transit}${notes}
       <div class="qbtns">
-        <button class="qbtn" onclick="openLink('${mapsDir(next.lat,next.lng,next.location)}')"><i class="ti ti-navigation" style="color:var(--navy2)"></i><div>Direction</div></button>
+        <button class="qbtn" onclick="openLink('${mapsDirMode(next.lat,next.lng,next.location,nmode)}')"><i class="ti ${nmeta.icon}" style="color:var(--navy2)"></i><div>${nmeta.label}</div></button>
         <button class="qbtn" onclick="openLink('${mapsSearch("halal food near "+(next.location||""))}')"><i class="ti ti-tools-kitchen-2" style="color:#c0562f"></i><div>Halal</div></button>
         <button class="qbtn" onclick="openLink('${mapsSearch("convenience store near "+(next.location||""))}')"><i class="ti ti-building-store" style="color:#7c7b76"></i><div>Store</div></button>
       </div>
+      ${nmode==="drive"?`<button class="bigbtn grey" style="margin-top:10px" onclick="openLink('${parkingNear(next.location,next.lat,next.lng)}')"><i class="ti ti-parking"></i>Parking berdekatan</button>`:""}
       ${doneBtn}
     </div>
     ${paceBlock(next)}
@@ -647,6 +650,111 @@ function renderToday(){
   `;
 }
 function markDone(id){setStatus("Itinerary",id,"done");}
+
+// ====== TRANSPORT MODE (per stop; `transport` column overrides, else area default) ======
+const AREA_MODE=[
+  {re:/kawaguchiko|fujiyoshida|fuji-?q|yamanaka|makaino|gotemba|chureito|mishima|home in fuji/i,mode:"drive"},
+  {re:/kyoto|gion|arashiyama|fushimi|higashiyama|shijo|omiya/i,mode:"taxi"},
+  {re:/osaka|namba|umeda|dotonbori|shin-osaka|sakuragawa/i,mode:"train"}
+];
+const MODE_META={
+  train:{label:"Train",icon:"ti-train",travel:"transit"},
+  transit:{label:"Train",icon:"ti-train",travel:"transit"},
+  drive:{label:"Drive",icon:"ti-car",travel:"driving"},
+  driving:{label:"Drive",icon:"ti-car",travel:"driving"},
+  taxi:{label:"Taxi",icon:"ti-car",travel:"driving"},
+  walk:{label:"Walk",icon:"ti-walk",travel:"walking"},
+  walking:{label:"Walk",icon:"ti-walk",travel:"walking"}
+};
+function stopMode(r){
+  const m=String((r&&r.transport)||"").trim().toLowerCase();
+  if(m&&MODE_META[m])return m;
+  const loc=String((r&&(r.location||r.activity))||"");
+  for(let i=0;i<AREA_MODE.length;i++){if(AREA_MODE[i].re.test(loc))return AREA_MODE[i].mode;}
+  return "transit"; // default (Tokyo & umum) = train
+}
+function mapsDirMode(lat,lng,name,mode){
+  const mm=MODE_META[mode]||MODE_META.transit;
+  const dest=(lat&&lng)?(lat+","+lng):encodeURIComponent(name||"");
+  return "https://www.google.com/maps/dir/?api=1&destination="+dest+"&travelmode="+mm.travel;
+}
+function parkingNear(name,lat,lng){
+  if(lat&&lng)return "https://www.google.com/maps/search/parking/@"+lat+","+lng+",16z";
+  return mapsSearch("parking near "+(name||""));
+}
+
+// ====== CURRENCY (YEN <-> MYR, built-in) ======
+let CVT_FX=0.0257; // RM per 1 JPY
+function fxRate(){
+  const inf=rows("Info").find(r=>/exchange|rate|tukar/i.test(String(r.key)));
+  if(inf){const m=String(inf.value).match(/0?\.\d+/);if(m)return parseFloat(m[0]);}
+  return 0.0257;
+}
+function showCurrency(){
+  CVT_FX=fxRate();
+  $("#modalMount").innerHTML=`<div class="overlay" onclick="if(event.target===this)closeModal()">
+    <div class="modal">
+      <h3>Tukaran ¥ ⇄ RM</h3>
+      <p>Kadar: ¥1 = RM${CVT_FX} · boleh edit dalam Info (Exchange rate)</p>
+      <label class="field-label">Yen (¥)</label>
+      <input id="cvJPY" inputmode="decimal" oninput="cvtJPY()" placeholder="0">
+      <label class="field-label">Ringgit (RM)</label>
+      <input id="cvMYR" inputmode="decimal" oninput="cvtMYR()" placeholder="0">
+      <div style="display:flex;gap:7px;margin:2px 0 12px;flex-wrap:wrap">
+        ${[1000,3000,5000,10000].map(v=>`<button class="daytab" onclick="cvtSet(${v})">¥${v.toLocaleString()}</button>`).join("")}
+      </div>
+      <div class="modal-row"><button class="mbtn ghost" onclick="closeModal()">Tutup</button></div>
+    </div></div>`;
+}
+function cvtJPY(){const v=parseFloat($("#cvJPY").value)||0;const el=$("#cvMYR");if(el)el.value=(v*CVT_FX).toFixed(2);}
+function cvtMYR(){const v=parseFloat($("#cvMYR").value)||0;const el=$("#cvJPY");if(el)el.value=Math.round(v/CVT_FX);}
+function cvtSet(v){const el=$("#cvJPY");if(el){el.value=v;cvtJPY();}}
+
+// ====== PRAYER TIMES (ikut lokasi stop semasa, Aladhan API) ======
+const PRAYER_METHOD=3; // Muslim World League
+function to12(hhmm){const m=String(hhmm||"").match(/(\d{1,2}):(\d{2})/);if(!m)return hhmm||"—";let h=+m[1];const mm=m[2],ap=h<12?"AM":"PM",hh=(h%12)||12;return hh+":"+mm+" "+ap;}
+async function showPrayer(){
+  const it=rows("Itinerary");
+  const cur=it.find(r=>String(r.status).toLowerCase()!=="done")||it[0]||{};
+  const lat=cur.lat,lng=cur.lng,loc=cur.location||cur.activity||"lokasi semasa";
+  $("#modalMount").innerHTML=`<div class="overlay" onclick="if(event.target===this)closeModal()">
+    <div class="modal" style="max-height:82vh;display:flex;flex-direction:column">
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px">
+        <h3 style="margin:0">Waktu Solat</h3><button class="mini" style="flex:0 0 34px" onclick="closeModal()"><i class="ti ti-x"></i></button>
+      </div>
+      <p style="margin:0 0 12px">${esc(loc)}</p>
+      <div id="prayBody"><div class="empty"><span class="spin"></span><br>Loading…</div></div>
+    </div></div>`;
+  if(!lat||!lng){$("#prayBody").innerHTML='<div class="empty">Takde koordinat untuk lokasi ni.</div>';return;}
+  try{
+    const d=new Date();
+    const dd=String(d.getDate()).padStart(2,"0")+"-"+String(d.getMonth()+1).padStart(2,"0")+"-"+d.getFullYear();
+    const key="knm_pray_"+lat+"_"+lng+"_"+dd;
+    let t=null;try{t=JSON.parse(localStorage.getItem(key));}catch(e){}
+    if(!t){
+      const r=await fetch("https://api.aladhan.com/v1/timings/"+dd+"?latitude="+lat+"&longitude="+lng+"&method="+PRAYER_METHOD);
+      const j=await r.json();t=j.data.timings;try{localStorage.setItem(key,JSON.stringify(t));}catch(e){}
+    }
+    const P=[["Subuh",t.Fajr],["Syuruk",t.Sunrise],["Zohor",t.Dhuhr],["Asar",t.Asr],["Maghrib",t.Maghrib],["Isyak",t.Isha]];
+    $("#prayBody").innerHTML='<div style="overflow-y:auto">'+P.map(p=>`<div class="irow"><span class="k">${p[0]}</span><span class="v" style="font-size:15px">${to12(p[1])}</span></div>`).join("")+'<div class="binfo" style="margin-top:10px">Kaedah: Muslim World League · auto ikut koordinat stop semasa.</div></div>';
+  }catch(e){
+    $("#prayBody").innerHTML='<div class="empty">Tak dapat waktu solat — perlu internet. Cuba lagi bila online.</div>';
+  }
+}
+
+// ====== HALAL / MASJID ======
+function showHalal(){
+  modalScroll("Check Halal & Masjid",`
+    <div class="link-row" onclick="openLink('${mapsSearch("halal restaurant near me")}')"><i class="ti ti-tools-kitchen-2" style="color:#c0562f"></i><span>Restoran halal berdekatan (Maps)</span><i class="ti ti-external-link" style="color:var(--hint)"></i></div>
+    <div class="link-row" onclick="openLink('https://www.halalgourmet.jp/')"><i class="ti ti-checkbox" style="color:#0F6E56"></i><span>Halal Gourmet Japan</span><i class="ti ti-external-link" style="color:var(--hint)"></i></div>
+    <div class="link-row" onclick="openLink('https://halalnavi.com/')"><i class="ti ti-compass" style="color:#534AB7"></i><span>Halal Navi</span><i class="ti ti-external-link" style="color:var(--hint)"></i></div>
+    <div class="link-row" onclick="openLink('${mapsSearch("mosque musholla near me")}')"><i class="ti ti-building-mosque" style="color:#0F6E56"></i><span>Masjid / surau berdekatan</span><i class="ti ti-external-link" style="color:var(--hint)"></i></div>
+  `);
+}
+
+// ====== INFO / EMERGENCY EDIT ======
+function addInfo(cat){openEditForm("Info",null,{category:cat||""},"Tambah info");}
+function editInfoRow(row){const r=findByRow("Info",row);if(r)openEditForm("Info",row,r,"Edit info");}
 
 // ====== TRIP ======
 function renderTrip(){
@@ -671,13 +779,14 @@ function renderTrip(){
     const urgent=String(r.urgent).toUpperCase()==="YES"?' · <span style="color:var(--red)">urgent</span>':"";
     const transit=r.transit_info?`<div class="transit"><i class="ti ti-arrow-guide"></i>${esc(r.transit_info)}</div>`:"";
     const notes=r.notes?`<div class="tl-notes">${esc(r.notes)}</div>`:"";
+    const rmode=stopMode(r),rmeta=MODE_META[rmode],dirUrl=mapsDirMode(r.lat,r.lng,r.location,rmode);
     const admin=ADMIN?`<div class="tl-actions">
-        <button class="mini" onclick="openLink('${mapsDir(r.lat,r.lng,r.location)}')"><i class="ti ti-navigation" style="color:var(--navy2)"></i></button>
+        <button class="mini" onclick="openLink('${dirUrl}')"><i class="ti ${rmeta.icon}" style="color:var(--navy2)"></i></button>
         <button class="mini" onclick="editItin('${esc(r.id)}')"><i class="ti ti-edit"></i></button>
         <button class="mini" onclick="confirmDel('Itinerary',${r._row},'${esc(r.activity)}')"><i class="ti ti-trash" style="color:var(--red)"></i></button>
         <button class="mini" onclick="toggleDone('${esc(r.id)}','${done?'':'done'}')"><i class="ti ti-check" style="color:${done?'#B4B2A9':'#0F6E56'}"></i></button>
       </div>`
-      :`<div class="tl-actions"><button class="mini" onclick="openLink('${mapsDir(r.lat,r.lng,r.location)}')"><i class="ti ti-navigation" style="color:var(--navy2)"></i> <span style="font-size:11px">Direction</span></button></div>`;
+      :`<div class="tl-actions"><button class="mini" onclick="openLink('${dirUrl}')"><i class="ti ${rmeta.icon}" style="color:var(--navy2)"></i> <span style="font-size:11px">${rmeta.label}</span></button>${rmode==="drive"?`<button class="mini" onclick="openLink('${parkingNear(r.location,r.lat,r.lng)}')"><i class="ti ti-parking" style="color:var(--navy2)"></i> <span style="font-size:11px">Parking</span></button>`:""}</div>`;
     html+=`<div class="tl-item ${cls}">
       <div class="tl-time">${esc(r.time)}${urgent}${adjTag}${done?' <span class="tag-done">done</span>':''}</div>
       <div class="tl-act">${esc(r.activity)}</div>
@@ -764,11 +873,17 @@ function renderMore(){
       <div class="metric"><div class="lbl">Per pax</div><div class="num">${pax}</div></div>
     </div>
     <div class="link-row" onclick="showBudget()"><i class="ti ti-receipt" style="color:#7a72d6"></i><span>Full budget breakdown</span><i class="ti ti-chevron-right" style="color:var(--hint)"></i></div>
-    <div class="link-row" onclick="showInfo()"><i class="ti ti-plane" style="color:var(--navy2)"></i><span>Flight &amp; trip info</span><i class="ti ti-chevron-right" style="color:var(--hint)"></i></div>
-    <div class="link-row" onclick="showEmergency()"><i class="ti ti-urgent" style="color:var(--red)"></i><span>Emergency numbers</span><i class="ti ti-chevron-right" style="color:var(--hint)"></i></div>
-    <div class="link-row" onclick="showReminders()"><i class="ti ti-bell" style="color:#d69a3a"></i><span>All reminders</span><i class="ti ti-chevron-right" style="color:var(--hint)"></i></div>
-    <div class="link-row" onclick="openLink('${mapsSearch("halal restaurant near me")}')"><i class="ti ti-tools-kitchen-2" style="color:#c0562f"></i><span>Halal food finder</span><i class="ti ti-external-link" style="color:var(--hint)"></i></div>
+
+    <div class="sect-label">Tools</div>
+    <div class="link-row" onclick="showPrayer()"><i class="ti ti-building-mosque" style="color:#0F6E56"></i><span>Waktu solat (ikut lokasi)</span><i class="ti ti-chevron-right" style="color:var(--hint)"></i></div>
+    <div class="link-row" onclick="showCurrency()"><i class="ti ti-currency-yen" style="color:#534AB7"></i><span>Tukaran ¥ ⇄ RM</span><i class="ti ti-chevron-right" style="color:var(--hint)"></i></div>
+    <div class="link-row" onclick="showHalal()"><i class="ti ti-tools-kitchen-2" style="color:#c0562f"></i><span>Check halal &amp; masjid</span><i class="ti ti-chevron-right" style="color:var(--hint)"></i></div>
     <div class="link-row" onclick="openLink('${mapsSearch("convenience store near me")}')"><i class="ti ti-building-store" style="color:#7c7b76"></i><span>Convenience store</span><i class="ti ti-external-link" style="color:var(--hint)"></i></div>
+
+    <div class="sect-label">Info &amp; bantuan</div>
+    <div class="link-row" onclick="showInfo()"><i class="ti ti-plane" style="color:var(--navy2)"></i><span>Flight &amp; trip info</span><i class="ti ti-chevron-right" style="color:var(--hint)"></i></div>
+    <div class="link-row" onclick="showEmergency()"><i class="ti ti-urgent" style="color:var(--red)"></i><span>Kecemasan (embassy, hospital, takaful)</span><i class="ti ti-chevron-right" style="color:var(--hint)"></i></div>
+    <div class="link-row" onclick="showReminders()"><i class="ti ti-bell" style="color:#d69a3a"></i><span>All reminders</span><i class="ti ti-chevron-right" style="color:var(--hint)"></i></div>
     <div class="binfo" style="margin-top:14px;text-align:center">Data lives in your Google Sheet · edits sync to everyone</div>
   `;
 }
@@ -782,15 +897,32 @@ function showBudget(){
   });
   modalScroll("Full budget",html+'<div class="binfo" style="margin-top:10px">Base estimate. Excludes Fuji-Q rides, meals, shopping.</div>');
 }
+function infoEditBtns(r){
+  return ADMIN?` <button class="mini" style="display:inline-flex;flex:0 0 auto;padding:2px 7px;margin-left:6px" onclick="editInfoRow(${r._row})"><i class="ti ti-edit"></i></button><button class="mini" style="display:inline-flex;flex:0 0 auto;padding:2px 7px;margin-left:4px" onclick="confirmDel('Info',${r._row},'${esc(r.key||r.category)}')"><i class="ti ti-trash" style="color:var(--red)"></i></button>`:"";
+}
 function showInfo(){
   const inf=rows("Info");let html="";
-  inf.forEach(r=>{if(r.key)html+=`<div class="irow"><span class="k">${esc(r.key)}</span><span class="v">${esc(r.value)}</span></div>`;});
+  inf.forEach(r=>{if(r.key||r.value)html+=`<div class="irow"><span class="k">${esc(r.key)}</span><span class="v">${esc(r.value)}${infoEditBtns(r)}</span></div>`;});
+  if(ADMIN)html+=`<button class="bigbtn" style="margin-top:12px" onclick="addInfo('')"><i class="ti ti-plus"></i>Tambah baris info</button>`;
   modalScroll("Trip info",html);
 }
 function showEmergency(){
-  const inf=rows("Info").filter(r=>String(r.category).toLowerCase().includes("emergency"));
-  let html="";inf.forEach(r=>{html+=`<div class="irow"><span class="k">${esc(r.key)}</span><span class="v" style="color:var(--red);font-size:16px">${esc(r.value)}</span></div>`;});
-  modalScroll("Emergency",html||'<div class="empty">—</div>');
+  const inf=rows("Info").filter(r=>String(r.category).toLowerCase().includes("emergency")||/embassy|kedutaan|hospital|takaful|insurance/i.test(String(r.key)));
+  let html=`
+    <div class="sect-label" style="margin-top:0">Talian penting</div>
+    <div class="link-row" onclick="openLink('tel:110')"><i class="ti ti-urgent" style="color:var(--red)"></i><span>Polis</span><b class="rv">110</b></div>
+    <div class="link-row" onclick="openLink('tel:119')"><i class="ti ti-ambulance" style="color:var(--red)"></i><span>Ambulans / Bomba</span><b class="rv">119</b></div>
+    <div class="link-row" onclick="openLink('tel:+81334763840')"><i class="ti ti-building-bank" style="color:var(--navy2)"></i><span>Kedutaan Malaysia (Tokyo)</span><i class="ti ti-phone" style="color:var(--navy2)"></i></div>
+    <div class="link-row" onclick="openLink('${mapsSearch("Embassy of Malaysia Tokyo Nanpeidai")}')"><i class="ti ti-map-pin" style="color:var(--navy2)"></i><span>Kedutaan Malaysia — peta</span><i class="ti ti-external-link" style="color:var(--hint)"></i></div>
+    <div class="link-row" onclick="openLink('${mapsSearch("hospital near me")}')"><i class="ti ti-building-hospital" style="color:#c0562f"></i><span>Hospital berdekatan</span><i class="ti ti-external-link" style="color:var(--hint)"></i></div>
+  `;
+  if(inf.length){
+    html+=`<div class="sect-label">Kontak tersimpan</div>`;
+    inf.forEach(r=>{html+=`<div class="irow"><span class="k">${esc(r.key)}</span><span class="v">${esc(r.value)}${infoEditBtns(r)}</span></div>`;});
+  }
+  if(ADMIN)html+=`<button class="bigbtn" style="margin-top:12px" onclick="addInfo('Emergency')"><i class="ti ti-plus"></i>Tambah kontak (embassy / takaful / hospital)</button>`;
+  html+=`<div class="binfo" style="margin-top:10px">Nombor kedutaan/hospital — sahkan & edit ikut keperluan (Admin).</div>`;
+  modalScroll("Kecemasan & Bantuan",html);
 }
 function showReminders(){
   const rem=rows("Reminders");let html="";
