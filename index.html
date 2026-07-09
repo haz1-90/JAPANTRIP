@@ -277,6 +277,10 @@ nav{position:fixed;bottom:0;left:0;right:0;max-width:520px;margin:0 auto;
 .pacerow.anchor .pl{font-weight:700;}
 .pacerow.anchor .pr{color:var(--navy);font-weight:700;}
 .pacerow.tight .pr{color:var(--red);}
+.adj{display:inline-block;font-size:10px;font-weight:700;padding:2px 7px;border-radius:10px;margin-left:6px;
+  background:var(--accent-soft);color:var(--navy);vertical-align:middle;}
+.adj.tight{background:var(--redbg);color:var(--red);}
+.adj.fixed{background:var(--greenbg);color:var(--green);}
 
 @media (prefers-reduced-motion: reduce){
   *{animation-duration:.001ms!important;animation-iteration-count:1!important;transition-duration:.001ms!important;}
@@ -504,7 +508,7 @@ function nextAnchor(list,fromIdx){
   return null;
 }
 function pacePill(next){
-  if(!tripActive())return "";
+  if(!ADMIN||!tripActive())return "";
   const s=parseTimeToMin(next.time);if(s==null)return "";
   const diff=nowMin()-s; // + = behind
   if(Math.abs(diff)<=5)return '<span class="pill ok">On schedule</span>';
@@ -523,7 +527,7 @@ function paceToggle(){
   </div>`;
 }
 function paceBlock(next){
-  if(!tripActive())return "";
+  if(!ADMIN||!tripActive())return "";
   const list=dayList(next.day);
   const idx=list.findIndex(r=>String(r.id)===String(next.id));
   if(idx<0)return "";
@@ -560,6 +564,38 @@ function paceBlock(next){
   html+=`<div class="pacerow anchor"><span class="pl">${esc(anc.r.activity)}</span><span class="pr">${esc(anc.r.time)} · fixed</span></div>`;
   html+=`</div>`;
   return html;
+}
+// Cascade suggested times across a whole day (multiple fixed points). Returns
+// {id: {done}|{anchor,t}|{arr,leave,per,tight}|{sched}} for the Trip timeline.
+function dayPace(day){
+  const list=dayList(day),res={};
+  let i=0,cursor=nowMin();
+  while(i<list.length){
+    const r=list[i];
+    const done=String(r.status).toLowerCase()==="done";
+    const t=parseTimeToMin(r.time);
+    const isAnchor=String(r.urgent).toUpperCase()==="YES"&&t!=null&&!done;
+    if(done){res[r.id]={done:true};i++;continue;}
+    if(isAnchor){cursor=Math.max(cursor,t);res[r.id]={anchor:true,t:t};i++;continue;}
+    // flexible segment: gather until the next fixed point
+    let j=i;const seg=[];
+    while(j<list.length){
+      const rj=list[j],dj=String(rj.status).toLowerCase()==="done",tj=parseTimeToMin(rj.time);
+      const aj=String(rj.urgent).toUpperCase()==="YES"&&tj!=null&&!dj;
+      if(aj)break;
+      if(!dj)seg.push(rj);
+      j++;
+    }
+    const anchorT=(j<list.length)?parseTimeToMin(list[j].time):null;
+    if(anchorT!=null&&seg.length){
+      const per=Math.max(0,(anchorT-cursor)/seg.length);
+      seg.forEach(s=>{res[s.id]={arr:cursor,leave:cursor+per,per:per,tight:per<10};cursor+=per;});
+    }else{
+      seg.forEach(s=>{res[s.id]={sched:true};});
+    }
+    i=j;
+  }
+  return res;
 }
 
 function renderToday(){
@@ -622,10 +658,16 @@ function renderTrip(){
     return `<button class="daytab ${d===curDay?'on':''}" onclick="setDay(${d})">Day ${d}<br><span style="font-size:10px;opacity:.8">${esc(dt?dt.date:'')}</span></button>`;
   }).join("");
   const list=it.filter(r=>r.day===curDay);
-  let html='<div class="tl">';
+  const activeDay=(it.find(r=>String(r.status).toLowerCase()!=="done")||{}).day;
+  const paceOn=ADMIN&&tripActive()&&paceMode()==="flex"&&curDay===activeDay;
+  const pace=paceOn?dayPace(curDay):null;
+  let html=paceOn?'<div class="binfo" style="margin:0 0 11px">Auto-paced for today · suggested times shift with the clock (fixed points locked).</div>':'';
+  html+='<div class="tl">';
   list.forEach(r=>{
     const done=String(r.status).toLowerCase()==="done";
     const cls=(r.type==="prayer"?"prayer ":"")+(done?"done":"");
+    let adjTag="";
+    if(pace){const p=pace[r.id];if(p){if(p.anchor)adjTag=' <span class="adj fixed">fixed</span>';else if(p.arr!=null)adjTag=' <span class="adj'+(p.tight?' tight':'')+'">≈'+fmtMin(p.arr)+'</span>';}}
     const urgent=String(r.urgent).toUpperCase()==="YES"?' · <span style="color:var(--red)">urgent</span>':"";
     const transit=r.transit_info?`<div class="transit"><i class="ti ti-arrow-guide"></i>${esc(r.transit_info)}</div>`:"";
     const notes=r.notes?`<div class="tl-notes">${esc(r.notes)}</div>`:"";
@@ -637,7 +679,7 @@ function renderTrip(){
       </div>`
       :`<div class="tl-actions"><button class="mini" onclick="openLink('${mapsDir(r.lat,r.lng,r.location)}')"><i class="ti ti-navigation" style="color:var(--navy2)"></i> <span style="font-size:11px">Direction</span></button></div>`;
     html+=`<div class="tl-item ${cls}">
-      <div class="tl-time">${esc(r.time)}${urgent}${done?' <span class="tag-done">done</span>':''}</div>
+      <div class="tl-time">${esc(r.time)}${urgent}${adjTag}${done?' <span class="tag-done">done</span>':''}</div>
       <div class="tl-act">${esc(r.activity)}</div>
       <div class="tl-loc">${esc(r.location)}</div>
       ${transit}${notes}${admin}

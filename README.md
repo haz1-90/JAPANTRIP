@@ -133,14 +133,15 @@ Dua-dua sync sebab sumber sama (Sheet).
 
 ## 6b. LIVE PACING (skrin Today)
 
-Aktif time trip je (8–15 Nov 2026, atau bila ada stop dah "done"). Sebelum tu ia senyap.
+Semua pacing **admin sahaja** — orang lain nampak jadual biasa je. Aktif time trip (8–15 Nov 2026, atau bila ada stop dah "done"); sebelum tu senyap.
 
-- **Badge pace** — banding masa sekarang (JST) lawan masa jadual stop seterusnya → "On schedule" / "Ahead …" / "Behind …". Semua orang nampak.
+- **Badge pace** (Today) — banding masa sekarang (JST) lawan masa jadual stop seterusnya → "On schedule" / "Ahead …" / "Behind …".
 - **Fixed point** = baris `urgent = YES` yang ada masa (train, solat Jumaat, flight). Ni masa yang TAK boleh gerak.
-- **Toggle (admin je):**
+- **Toggle (Today):**
   - **Follow schedule** — tunjuk masa jadual asal tiap stop.
   - **Take your time** — baki masa sampai fixed point seterusnya dibahagi rata antara stop fleksibel. Duduk lama → stop lepas auto pendek; gerak awal → stop lepas jadi panjang. Fixed point tak berubah; kalau tak cukup masa, ia jadi merah.
-- Ni **advisory sahaja** — tak tulis ke Sheet. Butang "Mark done" pun admin je nampak.
+- **Skrin Trip** — bila mode "Take your time" & tengah tengok hari semasa, tiap stop fleksibel dapat tag masa cadangan (≈HH:MM) atas timeline; fixed point ditag "fixed".
+- Ni **advisory sahaja** — tak tulis ke Sheet. Butang "Mark done" pun admin je.
 
 ---
 
