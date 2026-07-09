@@ -1,0 +1,17 @@
+{
+  "name": "KNM Japan 2026",
+  "short_name": "KNM Japan",
+  "description": "Travel companion for the KNM Japan trip, 8–15 Nov 2026.",
+  "start_url": "./index.html",
+  "scope": "./",
+  "display": "standalone",
+  "orientation": "portrait",
+  "background_color": "#0C447C",
+  "theme_color": "#0C447C",
+  "lang": "en",
+  "icons": [
+    { "src": "icons/icon-192.png", "sizes": "192x192", "type": "image/png", "purpose": "any" },
+    { "src": "icons/icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any" },
+    { "src": "icons/icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "maskable" }
+  ]
+}
