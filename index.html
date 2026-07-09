@@ -260,6 +260,24 @@ nav{position:fixed;bottom:0;left:0;right:0;max-width:520px;margin:0 auto;
 .skel-card{height:150px;margin-bottom:12px;}
 .skel-line{height:14px;margin:8px 0;}
 
+/* live pacing */
+.pacebar{display:flex;align-items:center;gap:9px;flex-wrap:wrap;margin:0 0 12px;}
+.pacebar .plbl{font-size:12px;color:var(--muted);font-weight:700;text-transform:uppercase;letter-spacing:.4px;}
+.seg{display:inline-flex;background:var(--soft);border:1px solid var(--line);border-radius:22px;padding:3px;gap:2px;}
+.seg button{border:none;background:none;font-family:inherit;font-size:12px;font-weight:600;color:var(--muted);
+  padding:6px 13px;border-radius:20px;cursor:pointer;transition:transform .12s ease;}
+.seg button:active{transform:scale(.95);}
+.seg button.on{background:var(--card);color:var(--navy);box-shadow:var(--shadow);}
+.pacebox{background:var(--card);border:1px solid var(--line);border-radius:14px;padding:13px 14px;margin-top:11px;box-shadow:var(--shadow);}
+.pacebox .ph{font-size:11px;color:var(--hint);text-transform:uppercase;letter-spacing:.5px;font-weight:700;margin-bottom:9px;}
+.pacerow{display:flex;justify-content:space-between;gap:10px;font-size:13px;padding:7px 0;border-bottom:1px dashed var(--line);}
+.pacerow:last-child{border-bottom:none;}
+.pacerow .pl{color:var(--ink);}
+.pacerow .pr{color:var(--muted);font-weight:600;white-space:nowrap;}
+.pacerow.anchor .pl{font-weight:700;}
+.pacerow.anchor .pr{color:var(--navy);font-weight:700;}
+.pacerow.tight .pr{color:var(--red);}
+
 @media (prefers-reduced-motion: reduce){
   *{animation-duration:.001ms!important;animation-iteration-count:1!important;transition-duration:.001ms!important;}
 }
@@ -459,6 +477,91 @@ function parseTimeToMin(t){
   if(!m)return null;let h=+m[1],min=+m[2];const ap=(m[3]||"").toUpperCase();
   if(ap==="PM"&&h<12)h+=12;if(ap==="AM"&&h===12)h=0;return h*60+min;
 }
+
+// ====== LIVE PACING ======
+// Fixed points (trains, prayer, flights) = itinerary rows tagged urgent=YES with a
+// real clock time. Between fixed points, stops are flexible: their suggested time
+// auto-shrinks when you run late and grows when you're early. Advisory only — never
+// writes to the Sheet. Controls are admin-only; the info shows to everyone on the trip.
+const PACE_KEY="knm_pace_v1";
+function paceMode(){try{return localStorage.getItem(PACE_KEY)||"schedule";}catch(e){return "schedule";}}
+function setPaceMode(m){try{localStorage.setItem(PACE_KEY,m);}catch(e){}renderAll();}
+function nowMin(){const d=new Date();return d.getHours()*60+d.getMinutes();}
+function tripActive(){
+  const d=new Date();
+  const inWin=(d.getFullYear()===2026&&d.getMonth()===10&&d.getDate()>=8&&d.getDate()<=15);
+  const started=rows("Itinerary").some(r=>String(r.status).toLowerCase()==="done");
+  return inWin||started;
+}
+function fmtMin(m){m=((Math.round(m)%1440)+1440)%1440;let h=Math.floor(m/60),mm=m%60,ap=h<12?"AM":"PM",hh=h%12;if(hh===0)hh=12;return hh+":"+String(mm).padStart(2,"0")+" "+ap;}
+function fmtDur(m){m=Math.max(0,Math.round(m));const h=Math.floor(m/60),mm=m%60;if(h&&mm)return h+"h "+mm+"m";if(h)return h+"h";return mm+"m";}
+function dayList(day){return rows("Itinerary").filter(r=>r.day===day);}
+function nextAnchor(list,fromIdx){
+  for(let i=fromIdx;i<list.length;i++){
+    const r=list[i],t=parseTimeToMin(r.time);
+    if(String(r.urgent).toUpperCase()==="YES"&&t!=null&&String(r.status).toLowerCase()!=="done")return {r:r,t:t,i:i};
+  }
+  return null;
+}
+function pacePill(next){
+  if(!tripActive())return "";
+  const s=parseTimeToMin(next.time);if(s==null)return "";
+  const diff=nowMin()-s; // + = behind
+  if(Math.abs(diff)<=5)return '<span class="pill ok">On schedule</span>';
+  if(diff>5)return '<span class="pill late">Behind '+fmtDur(diff)+'</span>';
+  return '<span class="pill early">Ahead '+fmtDur(-diff)+'</span>';
+}
+function paceToggle(){
+  if(!ADMIN||!tripActive())return "";
+  const m=paceMode();
+  return `<div class="pacebar">
+    <span class="plbl">Pacing</span>
+    <span class="seg">
+      <button class="${m==='schedule'?'on':''}" onclick="setPaceMode('schedule')">Follow schedule</button>
+      <button class="${m==='flex'?'on':''}" onclick="setPaceMode('flex')">Take your time</button>
+    </span>
+  </div>`;
+}
+function paceBlock(next){
+  if(!tripActive())return "";
+  const list=dayList(next.day);
+  const idx=list.findIndex(r=>String(r.id)===String(next.id));
+  if(idx<0)return "";
+  const anc=nextAnchor(list,idx);
+  if(!anc)return ""; // no fixed point left today → nothing to pace against
+  if(anc.i===idx){
+    return `<div class="pacebox"><div class="ph">Fixed point</div>
+      <div class="pacerow anchor"><span class="pl">${esc(next.activity)}</span><span class="pr">be here · ${esc(next.time)}</span></div></div>`;
+  }
+  const now=nowMin(),mode=paceMode();
+  const flex=[];
+  for(let i=idx;i<anc.i;i++){
+    const r=list[i];
+    if(String(r.status).toLowerCase()==="done")continue;
+    if(String(r.urgent).toUpperCase()==="YES")continue;
+    flex.push(r);
+  }
+  const avail=anc.t-now;
+  let html=`<div class="pacebox"><div class="ph">${mode==="flex"?"Take your time":"Follow schedule"} → ${esc(anc.r.activity)} · ${esc(anc.r.time)}</div>`;
+  html+=`<div class="pacerow"><span class="pl">Time to fixed point</span><span class="pr">${avail<0?'<span style="color:var(--red)">'+fmtDur(-avail)+' over</span>':fmtDur(avail)+' left'}</span></div>`;
+  if(mode==="flex"&&flex.length){
+    let cursor=now;const per=Math.max(0,avail/flex.length);
+    flex.forEach(r=>{
+      const leave=cursor+per;
+      html+=`<div class="pacerow ${per<10?'tight':''}"><span class="pl">${esc(r.activity)}</span><span class="pr">${fmtMin(cursor)}–${fmtMin(leave)} · ${fmtDur(per)}</span></div>`;
+      cursor=leave;
+    });
+  }else{
+    flex.forEach(r=>{
+      const t=parseTimeToMin(r.time);
+      html+=`<div class="pacerow"><span class="pl">${esc(r.activity)}</span><span class="pr">${t!=null?esc(r.time):"flexible"}</span></div>`;
+    });
+  }
+  html+=`<div class="pacerow anchor"><span class="pl">${esc(anc.r.activity)}</span><span class="pr">${esc(anc.r.time)} · fixed</span></div>`;
+  html+=`</div>`;
+  return html;
+}
+
 function renderToday(){
   const it=rows("Itinerary");
   if(!it.length){$("#todayBody").innerHTML='<div class="empty">No itinerary yet.</div>';return;}
@@ -482,14 +585,16 @@ function renderToday(){
 
   const transit=next.transit_info?`<div class="transit"><i class="ti ti-arrow-guide"></i>${esc(next.transit_info)}</div>`:"";
   const notes=next.notes?`<div class="tl-notes">${esc(next.notes)}</div>`:"";
-  const doneBtn=ADMIN?`<button class="bigbtn" onclick="markDone('${esc(next.id)}')"><i class="ti ti-check"></i>Mark done · next stop</button>`
-                     :`<button class="bigbtn grey" onclick="toast('Admin only')"><i class="ti ti-lock"></i>Admin marks progress</button>`;
+  const doneBtn=ADMIN?`<button class="bigbtn" onclick="markDone('${esc(next.id)}')"><i class="ti ti-check"></i>Mark done · next stop</button>`:"";
+  const pill=pacePill(next);
 
   $("#todayBody").innerHTML=`
+    ${paceToggle()}
     <div class="eyebrow">Day ${esc(next.day)} · ${esc(next.date)}</div>
     <div style="font-size:12px;color:var(--navy);font-weight:700;margin-bottom:7px;letter-spacing:.5px;">NEXT STOP</div>
     <div class="nextcard">
       <div class="loc"><i class="ti ${ico}" style="color:${col}"></i>${esc(next.location||next.activity)}</div>
+      ${pill?`<div style="margin:9px 0 -2px">${pill}</div>`:""}
       <div class="time">${esc(next.time)||"—"}</div>
       <div style="font-size:14px;color:var(--muted);margin-bottom:2px;">${esc(next.activity)}</div>
       ${transit}${notes}
@@ -500,6 +605,7 @@ function renderToday(){
       </div>
       ${doneBtn}
     </div>
+    ${paceBlock(next)}
     <div class="sect-label">Urgent today</div>
     ${remHtml}
   `;
