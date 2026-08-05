@@ -30,7 +30,20 @@ Sheet **JAPAN NOV 2026** yang sedia ada (7 tab lama JANGAN usik). Tab baru
      (contoh 6 digit, MESTI lain dari ADMIN_PIN) → Save.
    - PIN ni nanti kongsi dengan 4 orang lain ikut WhatsApp — dia hanya boleh
      **tambah belanja**, tak boleh ubah itinerary.
-7. Deploy semula — **PENTING, ikut cara ini supaya URL tak berubah**:
+7. **Benarkan akses Drive** (WAJIB — kalau skip, scan resit akan gagal):
+   - ⚙️ **Project Settings** → tanda ✅ **"Show appsscript.json manifest file in editor"**
+   - Balik ke **Editor** → buka fail **`appsscript.json`** yang baru muncul
+   - Padam semua isi → paste kandungan fail `appsscript.json` dari repo GitHub → 💾 Save
+   - Dropdown fungsi → pilih **`authorize`** → **▶ Run**
+   - Skrin kebenaran keluar, kali ni sebut **Google Drive** → *Advanced* →
+     *Go to ... (unsafe)* → **Allow**
+   - Execution log patut baca: `Folder resit: ... | Drive API: HTTP 200`
+
+   > Kenapa perlu: web app TIDAK boleh papar skrin kebenaran sendiri. Kalau
+   > skop Drive tak diberi awal-awal, scan resit gagal dengan mesej
+   > "You do not have permission to call DriveApp".
+
+8. Deploy semula — **PENTING, ikut cara ini supaya URL tak berubah**:
    - **Deploy → Manage deployments**
    - Tekan ✏️ (Edit) kat deployment sedia ada
    - **Version: New version** → **Deploy**
