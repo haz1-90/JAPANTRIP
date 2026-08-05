@@ -367,7 +367,7 @@ nav{position:fixed;bottom:0;left:0;right:0;max-width:520px;margin:0 auto;
 <nav>
   <button class="navbtn on" data-s="today" onclick="go('today')"><i class="ti ti-calendar-event"></i><div>Today</div></button>
   <button class="navbtn" data-s="trip" onclick="go('trip')"><i class="ti ti-map-2"></i><div>Trip</div></button>
-  <button class="navbtn" data-s="money" onclick="go('money')"><i class="ti ti-wallet"></i><div>Duit</div></button>
+  <button class="navbtn" data-s="money" onclick="go('money')"><i class="ti ti-wallet"></i><div>Expenses</div></button>
   <button class="navbtn" data-s="park" onclick="go('park')"><i class="ti ti-parking"></i><div>Park</div></button>
   <button class="navbtn" data-s="stay" onclick="go('stay')"><i class="ti ti-bed"></i><div>Stay</div></button>
   <button class="navbtn" data-s="more" onclick="go('more')"><i class="ti ti-dots"></i><div>More</div></button>
@@ -467,7 +467,7 @@ async function apiPost(payload,pinOverride){
     const r=await fetch(API_URL,{method:"POST",body:JSON.stringify(payload)});
     return await r.json();
   }catch(e){
-    return {ok:false,error:"Offline — edit tak dihantar. Cuba lagi bila online."};
+    return {ok:false,error:"Offline — the change was not sent. Please try again when connected."};
   }
 }
 async function setStatus(tab,id,status){
@@ -685,7 +685,7 @@ function renderToday(){
         <button class="qbtn" onclick="openLink('${mapsSearch("halal food near "+(next.location||""))}')"><i class="ti ti-tools-kitchen-2" style="color:#c0562f"></i><div>Halal</div></button>
         <button class="qbtn" onclick="openLink('${mapsSearch("convenience store near "+(next.location||""))}')"><i class="ti ti-building-store" style="color:#7c7b76"></i><div>Store</div></button>
       </div>
-      ${nmode==="drive"?`<button class="bigbtn grey" style="margin-top:10px" onclick="openLink('${parkingNear(next.location,next.lat,next.lng)}')"><i class="ti ti-parking"></i>Parking berdekatan</button>`:""}
+      ${nmode==="drive"?`<button class="bigbtn grey" style="margin-top:10px" onclick="openLink('${parkingNear(next.location,next.lat,next.lng)}')"><i class="ti ti-parking"></i>Nearby parking</button>`:""}
       ${doneBtn}
     </div>
     ${paceBlock(next)}
@@ -738,16 +738,16 @@ function showCurrency(){
   CVT_FX=fxRate();
   $("#modalMount").innerHTML=`<div class="overlay" onclick="if(event.target===this)closeModal()">
     <div class="modal">
-      <h3>Tukaran ¥ ⇄ RM</h3>
-      <p>Kadar: ¥1 = RM${CVT_FX} · boleh edit dalam Info (Exchange rate)</p>
-      <label class="field-label">Yen (¥)</label>
+      <h3>Currency converter</h3>
+      <p>Rate: ¥1 = RM${CVT_FX} · editable in the Info tab under “Exchange rate”</p>
+      <label class="field-label">Japanese yen (¥)</label>
       <input id="cvJPY" inputmode="decimal" oninput="cvtJPY()" placeholder="0">
-      <label class="field-label">Ringgit (RM)</label>
+      <label class="field-label">Malaysian ringgit (RM)</label>
       <input id="cvMYR" inputmode="decimal" oninput="cvtMYR()" placeholder="0">
       <div style="display:flex;gap:7px;margin:2px 0 12px;flex-wrap:wrap">
         ${[1000,3000,5000,10000].map(v=>`<button class="daytab" onclick="cvtSet(${v})">¥${v.toLocaleString()}</button>`).join("")}
       </div>
-      <div class="modal-row"><button class="mbtn ghost" onclick="closeModal()">Tutup</button></div>
+      <div class="modal-row"><button class="mbtn ghost" onclick="closeModal()">Close</button></div>
     </div></div>`;
 }
 function cvtJPY(){const v=parseFloat($("#cvJPY").value)||0;const el=$("#cvMYR");if(el)el.value=(v*CVT_FX).toFixed(2);}
@@ -764,12 +764,12 @@ async function showPrayer(){
   $("#modalMount").innerHTML=`<div class="overlay" onclick="if(event.target===this)closeModal()">
     <div class="modal" style="max-height:82vh;display:flex;flex-direction:column">
       <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px">
-        <h3 style="margin:0">Waktu Solat</h3><button class="mini" style="flex:0 0 34px" onclick="closeModal()"><i class="ti ti-x"></i></button>
+        <h3 style="margin:0">Prayer Times</h3><button class="mini" style="flex:0 0 34px" onclick="closeModal()"><i class="ti ti-x"></i></button>
       </div>
       <p style="margin:0 0 12px">${esc(loc)}</p>
       <div id="prayBody"><div class="empty"><span class="spin"></span><br>Loading…</div></div>
     </div></div>`;
-  if(!lat||!lng){$("#prayBody").innerHTML='<div class="empty">Takde koordinat untuk lokasi ni.</div>';return;}
+  if(!lat||!lng){$("#prayBody").innerHTML='<div class="empty">No coordinates are available for this location.</div>';return;}
   try{
     const d=new Date();
     const dd=String(d.getDate()).padStart(2,"0")+"-"+String(d.getMonth()+1).padStart(2,"0")+"-"+d.getFullYear();
@@ -779,26 +779,26 @@ async function showPrayer(){
       const r=await fetch("https://api.aladhan.com/v1/timings/"+dd+"?latitude="+lat+"&longitude="+lng+"&method="+PRAYER_METHOD);
       const j=await r.json();t=j.data.timings;try{localStorage.setItem(key,JSON.stringify(t));}catch(e){}
     }
-    const P=[["Subuh",t.Fajr],["Syuruk",t.Sunrise],["Zohor",t.Dhuhr],["Asar",t.Asr],["Maghrib",t.Maghrib],["Isyak",t.Isha]];
-    $("#prayBody").innerHTML='<div style="overflow-y:auto">'+P.map(p=>`<div class="irow"><span class="k">${p[0]}</span><span class="v" style="font-size:15px">${to12(p[1])}</span></div>`).join("")+'<div class="binfo" style="margin-top:10px">Kaedah: Muslim World League · auto ikut koordinat stop semasa.</div></div>';
+    const P=[["Fajr",t.Fajr],["Sunrise",t.Sunrise],["Dhuhr",t.Dhuhr],["Asr",t.Asr],["Maghrib",t.Maghrib],["Isha",t.Isha]];
+    $("#prayBody").innerHTML='<div style="overflow-y:auto">'+P.map(p=>`<div class="irow"><span class="k">${p[0]}</span><span class="v" style="font-size:15px">${to12(p[1])}</span></div>`).join("")+'<div class="binfo" style="margin-top:10px">Calculation method: Muslim World League · based on the coordinates of the current stop.</div></div>';
   }catch(e){
-    $("#prayBody").innerHTML='<div class="empty">Tak dapat waktu solat — perlu internet. Cuba lagi bila online.</div>';
+    $("#prayBody").innerHTML='<div class="empty">Prayer times could not be retrieved. An internet connection is required.</div>';
   }
 }
 
 // ====== HALAL / MASJID ======
 function showHalal(){
-  modalScroll("Check Halal & Masjid",`
-    <div class="link-row" onclick="openLink('${mapsSearch("halal restaurant near me")}')"><i class="ti ti-tools-kitchen-2" style="color:#c0562f"></i><span>Restoran halal berdekatan (Maps)</span><i class="ti ti-external-link" style="color:var(--hint)"></i></div>
+  modalScroll("Halal food &amp; mosques",`
+    <div class="link-row" onclick="openLink('${mapsSearch("halal restaurant near me")}')"><i class="ti ti-tools-kitchen-2" style="color:#c0562f"></i><span>Halal restaurants nearby</span><i class="ti ti-external-link" style="color:var(--hint)"></i></div>
     <div class="link-row" onclick="openLink('https://www.halalgourmet.jp/')"><i class="ti ti-checkbox" style="color:#0F6E56"></i><span>Halal Gourmet Japan</span><i class="ti ti-external-link" style="color:var(--hint)"></i></div>
     <div class="link-row" onclick="openLink('https://halalnavi.com/')"><i class="ti ti-compass" style="color:#534AB7"></i><span>Halal Navi</span><i class="ti ti-external-link" style="color:var(--hint)"></i></div>
-    <div class="link-row" onclick="openLink('${mapsSearch("mosque musholla near me")}')"><i class="ti ti-building-mosque" style="color:#0F6E56"></i><span>Masjid / surau berdekatan</span><i class="ti ti-external-link" style="color:var(--hint)"></i></div>
+    <div class="link-row" onclick="openLink('${mapsSearch("mosque musholla near me")}')"><i class="ti ti-building-mosque" style="color:#0F6E56"></i><span>Mosques and prayer rooms nearby</span><i class="ti ti-external-link" style="color:var(--hint)"></i></div>
   `);
 }
 
 // ====== INFO / EMERGENCY EDIT ======
-function addInfo(cat){openEditForm("Info",null,{category:cat||""},"Tambah info");}
-function editInfoRow(row){const r=findByRow("Info",row);if(r)openEditForm("Info",row,r,"Edit info");}
+function addInfo(cat){openEditForm("Info",null,{category:cat||""},"Add information");}
+function editInfoRow(row){const r=findByRow("Info",row);if(r)openEditForm("Info",row,r,"Edit information");}
 
 // ====== TRIP ======
 function renderTrip(){
@@ -925,14 +925,14 @@ function renderMore(){
     <div class="link-row" onclick="showBudget()"><i class="ti ti-receipt" style="color:#7a72d6"></i><span>Full budget breakdown</span><i class="ti ti-chevron-right" style="color:var(--hint)"></i></div>
 
     <div class="sect-label">Tools</div>
-    <div class="link-row" onclick="showPrayer()"><i class="ti ti-building-mosque" style="color:#0F6E56"></i><span>Waktu solat (ikut lokasi)</span><i class="ti ti-chevron-right" style="color:var(--hint)"></i></div>
-    <div class="link-row" onclick="showCurrency()"><i class="ti ti-currency-yen" style="color:#534AB7"></i><span>Tukaran ¥ ⇄ RM</span><i class="ti ti-chevron-right" style="color:var(--hint)"></i></div>
-    <div class="link-row" onclick="showHalal()"><i class="ti ti-tools-kitchen-2" style="color:#c0562f"></i><span>Check halal &amp; masjid</span><i class="ti ti-chevron-right" style="color:var(--hint)"></i></div>
+    <div class="link-row" onclick="showPrayer()"><i class="ti ti-building-mosque" style="color:#0F6E56"></i><span>Prayer times (by location)</span><i class="ti ti-chevron-right" style="color:var(--hint)"></i></div>
+    <div class="link-row" onclick="showCurrency()"><i class="ti ti-currency-yen" style="color:#534AB7"></i><span>Currency converter (¥ ⇄ RM)</span><i class="ti ti-chevron-right" style="color:var(--hint)"></i></div>
+    <div class="link-row" onclick="showHalal()"><i class="ti ti-tools-kitchen-2" style="color:#c0562f"></i><span>Halal food &amp; mosques</span><i class="ti ti-chevron-right" style="color:var(--hint)"></i></div>
     <div class="link-row" onclick="openLink('${mapsSearch("convenience store near me")}')"><i class="ti ti-building-store" style="color:#7c7b76"></i><span>Convenience store</span><i class="ti ti-external-link" style="color:var(--hint)"></i></div>
 
-    <div class="sect-label">Info &amp; bantuan</div>
+    <div class="sect-label">Information &amp; assistance</div>
     <div class="link-row" onclick="showInfo()"><i class="ti ti-plane" style="color:var(--navy2)"></i><span>Flight &amp; trip info</span><i class="ti ti-chevron-right" style="color:var(--hint)"></i></div>
-    <div class="link-row" onclick="showEmergency()"><i class="ti ti-urgent" style="color:var(--red)"></i><span>Kecemasan (embassy, hospital, takaful)</span><i class="ti ti-chevron-right" style="color:var(--hint)"></i></div>
+    <div class="link-row" onclick="showEmergency()"><i class="ti ti-urgent" style="color:var(--red)"></i><span>Emergency (embassy, hospital, insurance)</span><i class="ti ti-chevron-right" style="color:var(--hint)"></i></div>
     <div class="link-row" onclick="showReminders()"><i class="ti ti-bell" style="color:#d69a3a"></i><span>All reminders</span><i class="ti ti-chevron-right" style="color:var(--hint)"></i></div>
     <div class="binfo" style="margin-top:14px;text-align:center">Data lives in your Google Sheet · edits sync to everyone</div>
   `;
@@ -953,26 +953,26 @@ function infoEditBtns(r){
 function showInfo(){
   const inf=rows("Info");let html="";
   inf.forEach(r=>{if(r.key||r.value)html+=`<div class="irow"><span class="k">${esc(r.key)}</span><span class="v">${esc(r.value)}${infoEditBtns(r)}</span></div>`;});
-  if(ADMIN)html+=`<button class="bigbtn" style="margin-top:12px" onclick="addInfo('')"><i class="ti ti-plus"></i>Tambah baris info</button>`;
+  if(ADMIN)html+=`<button class="bigbtn" style="margin-top:12px" onclick="addInfo('')"><i class="ti ti-plus"></i>Add information row</button>`;
   modalScroll("Trip info",html);
 }
 function showEmergency(){
   const inf=rows("Info").filter(r=>String(r.category).toLowerCase().includes("emergency")||/embassy|kedutaan|hospital|takaful|insurance/i.test(String(r.key)));
   let html=`
-    <div class="sect-label" style="margin-top:0">Talian penting</div>
-    <div class="link-row" onclick="openLink('tel:110')"><i class="ti ti-urgent" style="color:var(--red)"></i><span>Polis</span><b class="rv">110</b></div>
-    <div class="link-row" onclick="openLink('tel:119')"><i class="ti ti-ambulance" style="color:var(--red)"></i><span>Ambulans / Bomba</span><b class="rv">119</b></div>
-    <div class="link-row" onclick="openLink('tel:+81334763840')"><i class="ti ti-building-bank" style="color:var(--navy2)"></i><span>Kedutaan Malaysia (Tokyo)</span><i class="ti ti-phone" style="color:var(--navy2)"></i></div>
-    <div class="link-row" onclick="openLink('${mapsSearch("Embassy of Malaysia Tokyo Nanpeidai")}')"><i class="ti ti-map-pin" style="color:var(--navy2)"></i><span>Kedutaan Malaysia — peta</span><i class="ti ti-external-link" style="color:var(--hint)"></i></div>
-    <div class="link-row" onclick="openLink('${mapsSearch("hospital near me")}')"><i class="ti ti-building-hospital" style="color:#c0562f"></i><span>Hospital berdekatan</span><i class="ti ti-external-link" style="color:var(--hint)"></i></div>
+    <div class="sect-label" style="margin-top:0">Essential numbers</div>
+    <div class="link-row" onclick="openLink('tel:110')"><i class="ti ti-urgent" style="color:var(--red)"></i><span>Police</span><b class="rv">110</b></div>
+    <div class="link-row" onclick="openLink('tel:119')"><i class="ti ti-ambulance" style="color:var(--red)"></i><span>Ambulance / Fire</span><b class="rv">119</b></div>
+    <div class="link-row" onclick="openLink('tel:+81334763840')"><i class="ti ti-building-bank" style="color:var(--navy2)"></i><span>Malaysian Embassy (Tokyo)</span><i class="ti ti-phone" style="color:var(--navy2)"></i></div>
+    <div class="link-row" onclick="openLink('${mapsSearch("Embassy of Malaysia Tokyo Nanpeidai")}')"><i class="ti ti-map-pin" style="color:var(--navy2)"></i><span>Malaysian Embassy — map</span><i class="ti ti-external-link" style="color:var(--hint)"></i></div>
+    <div class="link-row" onclick="openLink('${mapsSearch("hospital near me")}')"><i class="ti ti-building-hospital" style="color:#c0562f"></i><span>Hospitals nearby</span><i class="ti ti-external-link" style="color:var(--hint)"></i></div>
   `;
   if(inf.length){
-    html+=`<div class="sect-label">Kontak tersimpan</div>`;
+    html+=`<div class="sect-label">Saved contacts</div>`;
     inf.forEach(r=>{html+=`<div class="irow"><span class="k">${esc(r.key)}</span><span class="v">${esc(r.value)}${infoEditBtns(r)}</span></div>`;});
   }
-  if(ADMIN)html+=`<button class="bigbtn" style="margin-top:12px" onclick="addInfo('Emergency')"><i class="ti ti-plus"></i>Tambah kontak (embassy / takaful / hospital)</button>`;
-  html+=`<div class="binfo" style="margin-top:10px">Nombor kedutaan/hospital — sahkan & edit ikut keperluan (Admin).</div>`;
-  modalScroll("Kecemasan & Bantuan",html);
+  if(ADMIN)html+=`<button class="bigbtn" style="margin-top:12px" onclick="addInfo('Emergency')"><i class="ti ti-plus"></i>Add contact (embassy / insurance / hospital)</button>`;
+  html+=`<div class="binfo" style="margin-top:10px">Embassy and hospital numbers should be verified and amended as required (Admin).</div>`;
+  modalScroll("Emergency &amp; assistance",html);
 }
 function showReminders(){
   const rem=rows("Reminders");let html="";
@@ -997,8 +997,10 @@ function modalScroll(title,body){
 // A settlement is just an expense row: category "Settlement", payer = pengirim,
 // split 100% to penerima — append-only history for free.
 const ME_KEY="knm_me", EXPPIN_KEY="knm_exp_pin";
-const CATS=[["Transport","🚆"],["Hotel","🏨"],["Makan","🍜"],["Aktiviti","🎫"],["Shopping","🛍️"],["Lain","💠"]];
+const CATS=[["Transport","🚆"],["Accommodation","🏨"],["Food","🍜"],["Activities","🎫"],["Shopping","🛍️"],["Other","💠"]];
 const CAT_ICON=Object.fromEntries(CATS);CAT_ICON["Settlement"]="🤝";
+// keep the earlier Malay labels mapped so rows written before the rename still show an icon
+Object.assign(CAT_ICON,{Hotel:"🏨",Makan:"🍜",Aktiviti:"🎫",Lain:"💠"});
 function meGet(){try{return localStorage.getItem(ME_KEY)||"";}catch(e){return "";}}
 function meSet(n){try{localStorage.setItem(ME_KEY,n);}catch(e){}renderMoney();}
 function memberList(){return rows("Members").map(r=>String(r.name||"").trim()).filter(Boolean);}
@@ -1060,70 +1062,70 @@ function tripDayNow(){
 function renderMoney(){
   const el=$("#moneyBody");if(!el)return;
   if(!moneyReady()){
-    el.innerHTML=`<div class="eyebrow">Duit · belanja & split</div>
-      <div class="card"><b>Setup diperlukan (sekali je)</b>
-      <div class="binfo" style="margin-top:8px">1. Tambah 2 tab dalam Google Sheet dengan header baris 1 <b>tepat</b> macam ni:</div>
+    el.innerHTML=`<div class="eyebrow">Expenses · split &amp; settlement</div>
+      <div class="card"><b>Setup required (one time only)</b>
+      <div class="binfo" style="margin-top:8px">1. Add two tabs to the Google Sheet, with row 1 headers <b>exactly</b> as follows:</div>
       <div class="binfo" style="margin-top:6px;font-family:monospace;font-size:11px;overflow-x:auto">
       <b>Members</b>: name | qr_link | note<br>
       <b>Expenses</b>: id | date | day | title | category | amount | currency | rate_to_rm | amount_rm | paid_by | split_type | split_with | notes | receipt_link</div>
-      <div class="binfo" style="margin-top:6px">2. Isi nama 5 orang dalam Members.<br>3. Paste Code.gs terbaru ke Apps Script → Deploy (Manage deployments → Edit → New version).<br>4. (Optional) Set <b>EXPENSE_PIN</b> dalam Script Properties & kongsi dengan group.<br>5. Refresh app ni.</div></div>`;
+      <div class="binfo" style="margin-top:6px">2. Enter the five names in Members.<br>3. Paste the latest Code.gs into Apps Script, then deploy (Manage deployments → Edit → New version).<br>4. Optionally set <b>EXPENSE_PIN</b> in Script Properties and share it with the group.<br>5. Refresh this application.</div></div>`;
     return;
   }
   const names=memberList(),me=meGet(),exp=expensesAll();
   const real=exp.filter(r=>String(r.category)!=="Settlement");
   const totRM=real.reduce((s,r)=>s+(Number(r.amount_rm)||0),0);
   const net=balances();
-  const meHtml=`<div class="sect-label" style="margin-top:0">Saya siapa?</div>
+  const meHtml=`<div class="sect-label" style="margin-top:0">I am</div>
     <div class="chiprow">${names.map(n=>`<button class="daytab ${n===me?'on':''}" onclick="meSet('${jsq(n)}')">${esc(n)}</button>`).join("")}</div>`;
   let myShare=0;real.forEach(r=>{const sh=splitShares(r,names);myShare+=sh[me]||0;});
   const myNet=net[me]||0;
   const stats=`<div class="metrics">
       <div class="metric"><div class="lbl">Total trip spend</div><div class="num" style="font-size:17px">${rm2(totRM)}</div></div>
-      <div class="metric"><div class="lbl">Bahagian saya</div><div class="num" style="font-size:17px">${me?rm2(myShare):"—"}</div></div>
+      <div class="metric"><div class="lbl">My share</div><div class="num" style="font-size:17px">${me?rm2(myShare):"—"}</div></div>
     </div>
     <div class="metrics">
-      <div class="metric"><div class="lbl">Aku dihutang</div><div class="num" style="font-size:17px;color:var(--green)">${me?rm2(Math.max(0,myNet)):"—"}</div></div>
-      <div class="metric"><div class="lbl">Aku berhutang</div><div class="num" style="font-size:17px;color:var(--red)">${me?rm2(Math.max(0,-myNet)):"—"}</div></div>
+      <div class="metric"><div class="lbl">Owed to me</div><div class="num" style="font-size:17px;color:var(--green)">${me?rm2(Math.max(0,myNet)):"—"}</div></div>
+      <div class="metric"><div class="lbl">I owe</div><div class="num" style="font-size:17px;color:var(--red)">${me?rm2(Math.max(0,-myNet)):"—"}</div></div>
     </div>`;
   const sug=settleSuggest();
-  let settleHtml='<div class="sect-label">Settle up · paling sedikit transfer</div>';
-  if(!sug.length)settleHtml+='<div class="rem-item soft"><i class="ti ti-confetti"></i><span>Semua settle! Takde hutang.</span></div>';
+  let settleHtml='<div class="sect-label">Settlement · fewest transfers</div>';
+  if(!sug.length)settleHtml+='<div class="rem-item soft"><i class="ti ti-confetti"></i><span>All settled. No outstanding balances.</span></div>';
   else sug.forEach(s=>{
-    settleHtml+=`<div class="settle-line"><span class="who">${esc(s.from)} <i class="ti ti-arrow-right"></i> ${esc(s.to)}</span>
+    settleHtml+=`<div class="settle-line"><span class="who">${esc(s.from)} <span style="color:var(--hint)">&rarr;</span> ${esc(s.to)}</span>
       <span class="amt">${rm2(s.amt)}</span>
       <button class="mini" style="flex:0 0 auto;padding:6px 10px" onclick="showPayQR('${jsq(s.to)}',${s.amt})"><i class="ti ti-qrcode"></i></button>
       <button class="mini" style="flex:0 0 auto;padding:6px 10px" onclick="markSettled('${jsq(s.from)}','${jsq(s.to)}',${s.amt})"><i class="ti ti-check" style="color:var(--green)"></i></button>
     </div>`;
   });
-  let balHtml='<div class="sect-label">Baki bersih</div><div class="card">';
+  let balHtml='<div class="sect-label">Net balance</div><div class="card">';
   names.forEach(n=>{const v=net[n]||0;const cls=v>0.01?"pos":(v<-0.01?"neg":"zero");
-    balHtml+=`<div class="balrow"><span>${esc(n)}${n===me?' <span style="color:var(--hint)">(saya)</span>':''}</span><span class="${cls}">${(v>0.01?"+":(v<-0.01?"−":""))+rm2(Math.abs(v))}</span></div>`;});
+    balHtml+=`<div class="balrow"><span>${esc(n)}${n===me?' <span style="color:var(--hint)">(me)</span>':''}</span><span class="${cls}">${(v>0.01?"+":(v<-0.01?"−":""))+rm2(Math.abs(v))}</span></div>`;});
   balHtml+='</div>';
   // list by date, latest entry first
-  let listHtml='<div class="sect-label">Semua belanja</div>';
-  if(!exp.length)listHtml+='<div class="empty">Belum ada belanja. Tekan "+ Tambah belanja" bila mula spend.</div>';
+  let listHtml='<div class="sect-label">All expenses</div>';
+  if(!exp.length)listHtml+='<div class="empty">No expenses recorded yet. Use “Add expense” once spending begins.</div>';
   else{
     listHtml+='<div class="card">';
     exp.slice().reverse().forEach(r=>{
       const ic=CAT_ICON[r.category]||"💠";
       const cur=String(r.currency||"RM");
       const amtTxt=cur==="JPY"?("¥"+Number(r.amount).toLocaleString()):rm2(Number(r.amount));
-      const rcpt=r.receipt_link?`<button class="mini" style="flex:0 0 30px;padding:4px" onclick="openLink('${jsq(r.receipt_link)}')" title="Resit">🧾</button>`:"";
+      const rcpt=r.receipt_link?`<button class="mini" style="flex:0 0 30px;padding:4px" onclick="openLink('${jsq(r.receipt_link)}')" title="Receipt">🧾</button>`:"";
       const adminBtns=ADMIN?`<button class="mini" style="flex:0 0 30px;padding:4px" onclick="editExp(${r._row})"><i class="ti ti-edit"></i></button><button class="mini" style="flex:0 0 30px;padding:4px" onclick="confirmDel('Expenses',${r._row},'${jsq(r.title)}')"><i class="ti ti-trash" style="color:var(--red)"></i></button>`:"";
       listHtml+=`<div class="mrow"><div class="mi">${ic}</div>
         <div class="mt"><div class="t1">${esc(r.title)}</div>
-        <div class="t2">D${esc(r.day)} · ${esc(r.date)} · ${esc(r.paid_by)} bayar · split: ${esc(String(r.split_with||"ALL"))}</div></div>
+        <div class="t2">Day ${esc(r.day)} · ${esc(r.date)} · paid by ${esc(r.paid_by)} · split: ${esc(String(r.split_with||"ALL"))}</div></div>
         <div class="ma"><div class="a1">${amtTxt}</div><div class="a2">${rm2(Number(r.amount_rm)||0)}</div></div>${rcpt}${adminBtns}</div>`;
     });
     listHtml+='</div>';
   }
-  el.innerHTML=`<div class="eyebrow">Duit · belanja & split · kadar ¥1=RM${fxRate()}</div>
+  el.innerHTML=`<div class="eyebrow">Expenses · rate ¥1 = RM${fxRate()}</div>
     ${meHtml}${stats}
-    <button class="bigbtn" style="background:var(--brand1)" onclick="openExpenseForm()"><i class="ti ti-plus"></i>Tambah belanja</button>
+    <button class="bigbtn" style="background:var(--brand1)" onclick="openExpenseForm()"><i class="ti ti-plus"></i>Add expense</button>
     ${settleHtml}${balHtml}
-    <div class="link-row" style="margin-top:14px" onclick="showQRs()"><i class="ti ti-qrcode" style="color:#534AB7"></i><span>QR bayaran semua member</span><i class="ti ti-chevron-right" style="color:var(--hint)"></i></div>
+    <div class="link-row" style="margin-top:14px" onclick="showQRs()"><i class="ti ti-qrcode" style="color:#534AB7"></i><span>Member payment QR codes</span><i class="ti ti-chevron-right" style="color:var(--hint)"></i></div>
     ${listHtml}
-    <div class="binfo" style="margin-top:10px;text-align:center">Duit tak lalu app ni — bayar terus (DuitNow/tunai), app jadi lejar & kalkulator split.</div>`;
+    <div class="binfo" style="margin-top:10px;text-align:center">No money passes through this application. Payments are made directly (DuitNow or cash); this serves as the ledger and split calculator.</div>`;
 }
 
 // ---- add expense form ----
@@ -1143,11 +1145,11 @@ function openExpenseForm(){
     </div>`).join("");
   $("#modalMount").innerHTML=`<div class="overlay" onclick="if(event.target===this)closeModal()">
     <div class="modal" style="max-height:90vh;display:flex;flex-direction:column">
-      <h3>Tambah belanja</h3>
+      <h3>Add expense</h3>
       <div style="overflow-y:auto;margin-bottom:10px">
-        <label class="field-label">Apa dibeli *</label>
-        <input id="efTitle" placeholder="cth: Makan malam Ichiran">
-        <label class="field-label">Jumlah *</label>
+        <label class="field-label">Description *</label>
+        <input id="efTitle" placeholder="e.g. Dinner at Ichiran">
+        <label class="field-label">Amount *</label>
         <div style="display:flex;gap:8px">
           <input id="efAmt" inputmode="decimal" placeholder="0" style="flex:1" oninput="expRecalc()">
           <span class="seg" style="flex:0 0 auto">
@@ -1156,27 +1158,27 @@ function openExpenseForm(){
           </span>
         </div>
         <div class="binfo" id="efConv" style="margin:2px 0 8px"></div>
-        <label class="field-label">Kategori</label>
+        <label class="field-label">Category</label>
         <div class="chiprow">${catChips}</div>
-        <label class="field-label">Hari</label>
+        <label class="field-label">Day</label>
         <div class="chiprow">${dayChips}</div>
-        <label class="field-label">Siapa bayar</label>
+        <label class="field-label">Paid by</label>
         <select id="efPayer">${names.map(n=>`<option ${n===EF.payer?"selected":""}>${esc(n)}</option>`).join("")}</select>
         <label class="field-label">Split</label>
         <span class="seg" style="margin-bottom:8px;display:inline-flex">
-          <button id="efSpE" class="on" onclick="efSetSplit('equal')">Sama rata</button>
+          <button id="efSpE" class="on" onclick="efSetSplit('equal')">Equally</button>
           <button id="efSpC" onclick="efSetSplit('custom')">Custom</button>
         </span>
         <div>${memRows}</div>
         <div class="unalloc hidden" id="efUnalloc"></div>
-        <label class="field-label">Nota (optional)</label>
+        <label class="field-label">Notes (optional)</label>
         <input id="efNotes">
-        <label class="field-label">Resit (optional) — link gambar (Drive/Photos)</label>
+        <label class="field-label">Receipt (optional) — image link (Drive or Photos)</label>
         <input id="efReceipt" placeholder="https://...">
       </div>
       <div class="modal-row">
-        <button class="mbtn ghost" onclick="closeModal()">Batal</button>
-        <button class="mbtn primary" id="efSave" onclick="submitExpense()">Simpan</button>
+        <button class="mbtn ghost" onclick="closeModal()">Cancel</button>
+        <button class="mbtn primary" id="efSave" onclick="submitExpense()">Save</button>
       </div>
     </div></div>`;
   expRecalc();
@@ -1191,7 +1193,7 @@ function expRecalc(){
   const amt=parseFloat($("#efAmt")&&$("#efAmt").value)||0;
   const rate=EF.cur==="JPY"?fxRate():1;
   const conv=$("#efConv");
-  if(conv)conv.textContent=EF.cur==="JPY"?("≈ "+rm2(amt*rate)+" (kadar ¥1=RM"+rate+")"):"";
+  if(conv)conv.textContent=EF.cur==="JPY"?("≈ "+rm2(amt*rate)+" (rate ¥1 = RM"+rate+")"):"";
   if(EF.split==="custom"){
     let sum=0;document.querySelectorAll(".efamt").forEach(i=>{
       const chk=i.closest(".memchk").querySelector("input[type=checkbox]");
@@ -1200,7 +1202,7 @@ function expRecalc(){
     const left=Math.round((amt-sum)*100)/100;
     const u=$("#efUnalloc");
     if(u){u.classList.remove("hidden");
-      u.textContent=left===0?"✓ Split cukup":(left>0?("Belum diagih: "+(EF.cur==="JPY"?"¥"+left:rm2(left))):("Terlebih: "+(EF.cur==="JPY"?"¥"+(-left):rm2(-left))));
+      u.textContent=left===0?"✓ Fully allocated":(left>0?("Unallocated: "+(EF.cur==="JPY"?"¥"+left:rm2(left))):("Over-allocated: "+(EF.cur==="JPY"?"¥"+(-left):rm2(-left))));
       u.className="unalloc "+(left===0?"ok":"bad");}
     const sv=$("#efSave");if(sv)sv.disabled=(left!==0||amt<=0);
   }else{const sv=$("#efSave");if(sv)sv.disabled=false;}
@@ -1208,11 +1210,11 @@ function expRecalc(){
 async function submitExpense(){
   const title=($("#efTitle").value||"").trim();
   const amt=parseFloat($("#efAmt").value)||0;
-  if(!title){toast("Isi apa dibeli");return;}
-  if(amt<=0){toast("Isi jumlah");return;}
+  if(!title){toast("Please enter a description");return;}
+  if(amt<=0){toast("Please enter an amount");return;}
   const names=memberList();
   const checked=[...document.querySelectorAll(".efmem")].filter(c=>c.checked).map(c=>c.value);
-  if(!checked.length){toast("Pilih sekurang-kurangnya seorang");return;}
+  if(!checked.length){toast("Please select at least one person");return;}
   const rate=EF.cur==="JPY"?fxRate():1;
   let splitStr;
   if(EF.split==="custom"){
@@ -1250,22 +1252,22 @@ async function expensePost(payload,localRec){
   const j=await apiPost(payload,pin);
   if(j.ok){
     if(localRec&&DATA.Expenses){const hdrs=DATA.Expenses[0];DATA.Expenses.push(hdrs.map(h=>localRec[h]!=null?localRec[h]:""));saveCache();}
-    renderMoney();toast("Belanja disimpan");refresh(false);
+    renderMoney();toast("Expense saved");refresh(false);
   }else{
     if(/PIN/i.test(j.error||"")){try{localStorage.removeItem(EXPPIN_KEY);}catch(e){}askExpPin(payload,localRec);toast(j.error);}
-    else toast(j.error||"Gagal simpan");
+    else toast(j.error||"Could not save");
   }
 }
 function askExpPin(payload,localRec){
   window._pendingExp={payload:payload,rec:localRec};
   $("#modalMount").innerHTML=`<div class="overlay" onclick="if(event.target===this)closeModal()">
     <div class="modal">
-      <h3>PIN belanja</h3>
-      <p>Masukkan PIN group (EXPENSE_PIN) — sekali je, lepas ni auto.</p>
+      <h3>Expense PIN</h3>
+      <p>Enter the group PIN (EXPENSE_PIN). This is required once only on this device.</p>
       <input type="password" inputmode="numeric" id="expPinInput" placeholder="PIN" onkeydown="if(event.key==='Enter')saveExpPin()">
       <div class="modal-row">
-        <button class="mbtn ghost" onclick="closeModal()">Batal</button>
-        <button class="mbtn primary" onclick="saveExpPin()">Teruskan</button>
+        <button class="mbtn ghost" onclick="closeModal()">Cancel</button>
+        <button class="mbtn primary" onclick="saveExpPin()">Continue</button>
       </div>
     </div></div>`;
   setTimeout(()=>$("#expPinInput")&&$("#expPinInput").focus(),100);
@@ -1280,11 +1282,11 @@ async function saveExpPin(){
 function markSettled(from,to,amt){
   $("#modalMount").innerHTML=`<div class="overlay" onclick="if(event.target===this)closeModal()">
     <div class="modal">
-      <h3>Tandai selesai?</h3>
-      <p><b>${esc(from)}</b> dah transfer <b>${rm2(amt)}</b> kepada <b>${esc(to)}</b>? Rekod settlement akan ditambah (kekal dalam sejarah).</p>
+      <h3>Mark as settled?</h3>
+      <p>Confirm that <b>${esc(from)}</b> has transferred <b>${rm2(amt)}</b> to <b>${esc(to)}</b>. A settlement record will be added and retained in the history.</p>
       <div class="modal-row">
-        <button class="mbtn ghost" onclick="closeModal()">Belum</button>
-        <button class="mbtn primary" onclick="doSettle('${jsq(from)}','${jsq(to)}',${amt})">Ya, dah bayar</button>
+        <button class="mbtn ghost" onclick="closeModal()">Not yet</button>
+        <button class="mbtn primary" onclick="doSettle('${jsq(from)}','${jsq(to)}',${amt})">Yes, payment made</button>
       </div>
     </div></div>`;
 }
@@ -1302,11 +1304,11 @@ function showPayQR(name,amt){
   const qr=m&&m.qr_link;
   $("#modalMount").innerHTML=`<div class="overlay" onclick="if(event.target===this)closeModal()">
     <div class="modal" style="text-align:center">
-      <h3>Bayar ${esc(name)}</h3>
-      <p>Jumlah: <b style="font-size:18px;color:var(--navy)">${rm2(amt)}</b></p>
-      ${qr?`<img class="qrimg" src="${esc(qr)}" alt="QR ${esc(name)}">`:`<div class="empty">${esc(name)} belum letak QR.<br>Tambah link dalam tab Members (qr_link).</div>`}
-      <div class="binfo" style="margin-bottom:10px">Scan guna app bank → masukkan jumlah → siap. Lepas transfer, tekan ✓ kat senarai settle.</div>
-      <div class="modal-row"><button class="mbtn ghost" onclick="closeModal()">Tutup</button></div>
+      <h3>Pay ${esc(name)}</h3>
+      <p>Amount: <b style="font-size:18px;color:var(--navy)">${rm2(amt)}</b></p>
+      ${qr?`<img class="qrimg" src="${esc(qr)}" alt="QR ${esc(name)}">`:`<div class="empty">${esc(name)} has not provided a QR code.<br>Add the link in the Members tab (qr_link).</div>`}
+      <div class="binfo" style="margin-bottom:10px">Scan with your banking application, enter the amount, and complete the transfer. Afterwards, press ✓ in the settlement list.</div>
+      <div class="modal-row"><button class="mbtn ghost" onclick="closeModal()">Close</button></div>
     </div></div>`;
 }
 function showQRs(){
@@ -1315,9 +1317,9 @@ function showQRs(){
   ms.forEach(m=>{
     html+=`<div class="sect-label">${esc(m.name)}</div>`;
     html+=m.qr_link?`<img class="qrimg" src="${esc(m.qr_link)}" alt="QR ${esc(m.name)}">`
-      :`<div class="binfo">Belum ada QR — letak link screenshot DuitNow QR dalam tab Members → qr_link.</div>`;
+      :`<div class="binfo">No QR code yet — add a link to the DuitNow QR screenshot in the Members tab under qr_link.</div>`;
   });
-  modalScroll("QR bayaran member",html||'<div class="empty">Tab Members kosong.</div>');
+  modalScroll("Member payment QR codes",html||'<div class="empty">The Members tab is empty.</div>');
 }
 
 // ====== ADMIN EDIT FORMS ======
@@ -1325,10 +1327,10 @@ function fieldsFor(tab){return headers(tab).filter(h=>h&&h!=="_row");}
 function findByRow(tab,rowNum){return rows(tab).find(r=>r._row===rowNum);}
 function findById(tab,id){return rows(tab).find(r=>String(r.id)===String(id));}
 
-function editItin(id){const r=findById("Itinerary",id);if(!r){toast("Stop tak jumpa — refresh dulu");return;}openEditForm("Itinerary",r._row,r,"Edit stop");}
+function editItin(id){const r=findById("Itinerary",id);if(!r){toast("Stop not found — please refresh");return;}openEditForm("Itinerary",r._row,r,"Edit stop");}
 function addItin(){const blank={day:curDay,date:(rows("Itinerary").find(x=>String(x.day)===String(curDay))||{}).date||""};openEditForm("Itinerary",null,blank,"Add stop");}
-function editPark(row){const r=findByRow("Parking",row);if(!r){toast("Row tak jumpa — refresh dulu");return;}openEditForm("Parking",row,r,"Edit parking");}
-function editExp(row){const r=findByRow("Expenses",row);if(!r){toast("Row tak jumpa — refresh dulu");return;}openEditForm("Expenses",row,r,"Edit belanja");}
+function editPark(row){const r=findByRow("Parking",row);if(!r){toast("Row not found — please refresh");return;}openEditForm("Parking",row,r,"Edit parking");}
+function editExp(row){const r=findByRow("Expenses",row);if(!r){toast("Row tak jumpa — refresh dulu");return;}openEditForm("Expenses",row,r,"Edit expense");}
 function editStay(row){const r=findByRow("Accommodation",row);if(!r){toast("Row tak jumpa — refresh dulu");return;}openEditForm("Accommodation",row,r,"Edit stay");}
 
 function openEditForm(tab,rowNum,data,title){

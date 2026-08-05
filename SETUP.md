@@ -42,11 +42,11 @@ Sheet **JAPAN NOV 2026** yang sedia ada (7 tab lama JANGAN usik). Tab baru
 ## BAHAGIAN B — Test (3 minit)
 
 1. Buka app: `https://haz1-90.github.io/JAPANTRIP/` → tekan **Refresh** (atas kanan).
-2. Tab **Duit** (bawah, tengah) → kad "Setup diperlukan" patut DAH HILANG,
+2. Tab **Expenses** (bawah, tengah) → kad "Setup required" patut DAH HILANG,
    ganti dengan chips nama 5 orang.
-3. Pilih nama kau kat "Saya siapa?".
-4. Tekan **Tambah belanja** → isi test: `Test`, `100`, ¥ → Simpan →
-   masukkan **EXPENSE_PIN** bila diminta → patut keluar "Belanja disimpan".
+3. Pilih nama kau kat "I am".
+4. Tekan **Add expense** → isi test: `Test`, `100`, ¥ → Save →
+   masukkan **EXPENSE_PIN** bila diminta → patut keluar "Expense saved".
 5. Check Sheet tab Expenses — ada 1 baris baru. ✅ Berjaya!
 6. Padam baris test tu terus dalam Sheet (klik kanan nombor baris → Delete row),
    pastu Refresh app.
@@ -64,7 +64,7 @@ dan deploy guna Manage deployments → Edit (bukan New deployment).
 2. Upload screenshot ke **Google Drive** → klik kanan file → **Share →
    Anyone with the link → Viewer** → Copy link.
 3. Paste link tu dalam Sheet tab `Members`, kolum `qr_link`, baris nama sendiri.
-4. Test: app → Duit → "QR bayaran semua member" → gambar patut keluar.
+4. Test: app → Expenses → "Member payment QR codes" → gambar patut keluar.
 
 > Nota: QR DuitNow memang direka untuk dikongsi (ia untuk TERIMA duit).
 > Tapi sesiapa yang ada URL app boleh nampak — kalau ada member tak selesa,
@@ -72,7 +72,7 @@ dan deploy guna Manage deployments → Edit (bukan New deployment).
 
 ### Resit belanja (masa trip)
 1. Snap gambar resit → upload ke Drive (atau guna link Google Photos).
-2. Masa tambah belanja, paste link kat ruang **"Resit (optional)"** —
+2. Masa tambah belanja, paste link kat ruang **"Receipt (optional)"** —
    atau tambah kemudian dalam Sheet, kolum `receipt_link`.
 3. Dalam senarai belanja, item yang ada resit akan tunjuk butang 🧾 — tekan untuk buka.
 
@@ -86,7 +86,7 @@ dan deploy guna Manage deployments → Edit (bukan New deployment).
 | Benda | Di mana |
 |---|---|
 | Tukar itinerary/masa/tempat/budget | Edit Sheet terus, atau app (Admin PIN) |
-| Tambah belanja | App → Duit (EXPENSE_PIN — semua orang boleh) |
+| Tambah belanja | App → Expenses (EXPENSE_PIN — semua orang boleh) |
 | Edit/padam belanja | Admin dalam app, atau edit Sheet terus |
 | Tukar kadar ¥→RM | Sheet → Info → `Exchange rate` |
 | Trip anjak tarikh | Sheet → Info → `Dates` (format "8-15 November 2026") |
