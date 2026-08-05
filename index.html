@@ -285,36 +285,80 @@ nav{position:fixed;bottom:0;left:0;right:0;max-width:520px;margin:0 auto;
 
 .greet{font-size:20px;font-weight:800;letter-spacing:-.4px;margin:0 0 10px;}
 
-/* lock screen */
-.lock{position:fixed;inset:0;z-index:500;background:linear-gradient(160deg,var(--brand1),var(--brand2));
-  display:flex;align-items:center;justify-content:center;padding:24px calc(20px + var(--safe-b));
-  overflow-y:auto;}
-.lock-inner{width:100%;max-width:330px;text-align:center;color:#fff;padding:var(--safe-t) 0 0;}
-.lock-logo{width:52px;height:52px;border-radius:15px;margin:0 auto 12px;
-  background:rgba(255,255,255,.16);border:1px solid rgba(255,255,255,.28);
-  display:flex;align-items:center;justify-content:center;font-size:22px;font-weight:800;}
-.lock-title{font-size:19px;font-weight:800;letter-spacing:-.3px;}
-.lock-sub{font-size:13px;opacity:.8;margin-top:4px;min-height:19px;}
-.lock-sub.bad{color:#ffc9c4;opacity:1;font-weight:600;}
-.pindots{display:flex;gap:11px;justify-content:center;margin:20px 0 22px;min-height:15px;}
-.pindots i{width:13px;height:13px;border-radius:50%;background:rgba(255,255,255,.22);
-  border:1px solid rgba(255,255,255,.35);display:block;}
-.pindots i.on{background:#fff;border-color:#fff;}
-.shake{animation:shk .4s;}
-@keyframes shk{0%,100%{transform:translateX(0)}20%{transform:translateX(-9px)}40%{transform:translateX(9px)}60%{transform:translateX(-5px)}80%{transform:translateX(5px)}}
-.keypad{display:grid;grid-template-columns:repeat(3,1fr);gap:11px;}
-.key{height:60px;border-radius:15px;border:1px solid rgba(255,255,255,.2);
-  background:rgba(255,255,255,.13);color:#fff;font-size:23px;font-weight:600;cursor:pointer;
-  transition:transform .1s,background .15s;font-family:inherit;}
-.key:active{transform:scale(.94);background:rgba(255,255,255,.28);}
-.key.alt{font-size:18px;background:rgba(255,255,255,.07);}
-.lock-go{width:100%;margin-top:16px;padding:15px;border:none;border-radius:14px;
-  background:#12b886;color:#fff;font-size:16px;font-weight:700;cursor:pointer;font-family:inherit;
-  transition:opacity .2s,transform .1s;}
-.lock-go:active{transform:scale(.99);}
-.lock-go:disabled{opacity:.35;cursor:default;}
-.lock-note{font-size:12px;opacity:.65;margin-top:14px;line-height:1.5;}
-.lock-note a,.lock-skip{color:#fff;text-decoration:underline;cursor:pointer;}
+/* lock screen — gambar penuh, kandungan di tepi atas & bawah supaya Fuji nampak */
+.lock{position:fixed;inset:0;z-index:500;background:#0b1b30;overflow:hidden;
+  display:flex;flex-direction:column;justify-content:space-between;
+  padding:calc(var(--safe-t) + 30px) 20px calc(var(--safe-b) + 18px);
+  animation:lockIn .5s cubic-bezier(.16,1,.3,1);}
+@keyframes lockIn{from{opacity:0}to{opacity:1}}
+.lock .fuji,.lock .fuji-photo{position:absolute;inset:0;width:100%;height:100%;object-fit:cover;
+  animation:kenburns 26s ease-in-out infinite alternate;}
+@keyframes kenburns{from{transform:scale(1)}to{transform:scale(1.07)}}
+/* Gelap di atas & bawah sahaja — tengah dibiar jernih supaya gunung nampak */
+.lock-veil{position:absolute;inset:0;background:
+  linear-gradient(180deg,rgba(4,16,31,.70) 0%,rgba(4,16,31,.22) 20%,
+                  rgba(4,16,31,0) 34%,rgba(4,16,31,0) 56%,
+                  rgba(4,16,31,.55) 72%,rgba(4,16,31,.88) 100%);}
+.lock-top,.lock-bottom{position:relative;text-align:center;color:#fff;
+  animation:lockUp .6s cubic-bezier(.16,1,.3,1) both;}
+.lock-top{animation-delay:.05s}
+.lock-bottom{animation-delay:.15s;max-width:310px;margin:0 auto;width:100%}
+@keyframes lockUp{from{opacity:0;transform:translateY(16px)}to{opacity:1;transform:none}}
+.lock-logo{width:52px;height:52px;border-radius:17px;margin:0 auto 12px;
+  background:rgba(255,255,255,.15);border:1px solid rgba(255,255,255,.32);
+  -webkit-backdrop-filter:blur(12px);backdrop-filter:blur(12px);
+  display:flex;align-items:center;justify-content:center;font-size:22px;font-weight:800;
+  box-shadow:0 10px 30px rgba(0,0,0,.35);}
+.lock-title{font-size:23px;font-weight:800;letter-spacing:-.4px;text-shadow:0 2px 16px rgba(0,0,0,.5);}
+.lock-dates{font-size:12px;opacity:.8;margin-top:3px;letter-spacing:2px;text-transform:uppercase;
+  font-weight:600;text-shadow:0 1px 10px rgba(0,0,0,.5);}
+.lock-open{width:100%;padding:16px;border-radius:16px;border:1px solid rgba(255,255,255,.28);
+  background:rgba(255,255,255,.13);-webkit-backdrop-filter:blur(14px);backdrop-filter:blur(14px);
+  color:#fff;font-size:16px;font-weight:700;font-family:inherit;cursor:pointer;
+  display:flex;align-items:center;justify-content:center;gap:8px;
+  box-shadow:0 10px 30px rgba(0,0,0,.3);transition:transform .12s,opacity .3s,max-height .35s;
+  animation:pulseGlow 2.6s ease-in-out infinite;}
+.lock-open:active{transform:scale(.98);}
+@keyframes pulseGlow{0%,100%{box-shadow:0 10px 30px rgba(0,0,0,.3)}
+  50%{box-shadow:0 10px 34px rgba(255,255,255,.22)}}
+.lock.open .lock-open{max-height:0;opacity:0;padding:0;margin:0;border:none;overflow:hidden;animation:none;}
+.lock-pad{max-height:0;opacity:0;overflow:hidden;transform:translateY(14px);
+  transition:max-height .42s cubic-bezier(.16,1,.3,1),opacity .3s ease,transform .42s cubic-bezier(.16,1,.3,1);}
+.lock.open .lock-pad{max-height:460px;opacity:1;transform:none;}
+.lock.open .lock-veil{background:linear-gradient(180deg,rgba(4,16,31,.72) 0%,rgba(4,16,31,.28) 18%,
+  rgba(4,16,31,.10) 32%,rgba(4,16,31,.42) 50%,rgba(4,16,31,.88) 72%,rgba(4,16,31,.96) 100%);}
+.lock-veil{transition:background .42s ease;}
+.lock-sub{font-size:13px;opacity:.9;min-height:19px;font-weight:500;text-shadow:0 1px 10px rgba(0,0,0,.55);}
+.lock-sub.bad{color:#ffd0cb;opacity:1;font-weight:700;}
+.pindots{display:flex;gap:12px;justify-content:center;margin:12px 0 16px;min-height:14px;}
+.pindots i{width:12px;height:12px;border-radius:50%;background:rgba(255,255,255,.2);
+  border:1px solid rgba(255,255,255,.5);display:block;transition:transform .18s,background .18s;}
+.pindots i.on{background:#fff;border-color:#fff;transform:scale(1.18);
+  box-shadow:0 0 14px rgba(255,255,255,.65);}
+.shake{animation:shk .45s;}
+@keyframes shk{0%,100%{transform:translateX(0)}18%{transform:translateX(-10px)}36%{transform:translateX(10px)}56%{transform:translateX(-6px)}76%{transform:translateX(6px)}}
+.keypad{display:grid;grid-template-columns:repeat(3,1fr);gap:10px;}
+.key{height:54px;border-radius:16px;border:1px solid rgba(255,255,255,.22);
+  background:rgba(255,255,255,.10);color:#fff;font-size:21px;font-weight:600;cursor:pointer;
+  -webkit-backdrop-filter:blur(14px) saturate(150%);backdrop-filter:blur(14px) saturate(150%);
+  transition:transform .1s,background .18s;font-family:inherit;
+  text-shadow:0 1px 8px rgba(0,0,0,.4);box-shadow:0 4px 16px rgba(0,0,0,.16);}
+.key:active{transform:scale(.93);background:rgba(255,255,255,.3);}
+.key.alt{font-size:17px;background:rgba(255,255,255,.05);}
+.lock-go{width:100%;margin-top:12px;padding:14px;border:none;border-radius:15px;
+  background:linear-gradient(135deg,#14c08e,#0f9e73);color:#fff;font-size:16px;font-weight:700;
+  cursor:pointer;font-family:inherit;box-shadow:0 8px 24px rgba(15,158,115,.4);
+  transition:opacity .25s,transform .1s;}
+.lock-go:active{transform:scale(.98);}
+.lock-go:disabled{opacity:.3;box-shadow:none;cursor:default;}
+@media (max-height:700px){
+  .key{height:46px;font-size:19px}
+  .lock-logo{width:44px;height:44px;font-size:19px;margin-bottom:8px}
+  .lock-title{font-size:20px}
+}
+
+.greet{font-size:20px;font-weight:800;letter-spacing:-.4px;margin:0 0 10px;}
+
 
 /* kad ringkas Today */
 .quick2{display:flex;gap:9px;margin-bottom:12px;}
@@ -426,12 +470,73 @@ nav{position:fixed;bottom:0;left:0;right:0;max-width:520px;margin:0 auto;
 
 <!-- Skrin kunci: penuh skrin, di atas segala-galanya -->
 <div id="lockScreen" class="lock hidden">
-  <div class="lock-inner">
+  <svg class="fuji" aria-hidden="true" viewBox="0 0 390 844" preserveAspectRatio="xMidYMid slice" xmlns="http://www.w3.org/2000/svg">
+ <defs>
+  <linearGradient id="fjSky" x1="0" y1="0" x2="0" y2="1">
+   <stop offset="0%" stop-color="#071729"/><stop offset="18%" stop-color="#0d2745"/>
+   <stop offset="34%" stop-color="#22456b"/><stop offset="46%" stop-color="#5c6389"/>
+   <stop offset="55%" stop-color="#a67b93"/><stop offset="62%" stop-color="#dda184"/>
+   <stop offset="67%" stop-color="#f3c79c"/><stop offset="70%" stop-color="#1a2b45"/>
+   <stop offset="100%" stop-color="#050d1a"/>
+  </linearGradient>
+  <linearGradient id="fjMt" x1="0" y1="0" x2="0" y2="1">
+   <stop offset="0%" stop-color="#3a5988"/><stop offset="45%" stop-color="#243c62"/>
+   <stop offset="100%" stop-color="#152440"/>
+  </linearGradient>
+  <linearGradient id="fjRef" x1="0" y1="0" x2="0" y2="1">
+   <stop offset="0%" stop-color="#243c62" stop-opacity=".5"/><stop offset="100%" stop-color="#243c62" stop-opacity="0"/>
+  </linearGradient>
+  <radialGradient id="fjGlow" cx="50%" cy="50%" r="50%">
+   <stop offset="0%" stop-color="#ffdcae" stop-opacity=".42"/><stop offset="100%" stop-color="#ffdcae" stop-opacity="0"/>
+  </radialGradient>
+ </defs>
+ <rect width="390" height="844" fill="url(#fjSky)"/>
+ <g fill="#ffffff">
+  <circle cx="52" cy="66" r="1.1" opacity=".6"/><circle cx="136" cy="40" r="0.9" opacity=".4"/>
+  <circle cx="230" cy="84" r="1.2" opacity=".55"/><circle cx="318" cy="52" r="0.9" opacity=".38"/>
+  <circle cx="356" cy="116" r="1" opacity=".5"/><circle cx="86" cy="146" r="0.8" opacity=".32"/>
+  <circle cx="272" cy="156" r="0.9" opacity=".36"/><circle cx="178" cy="120" r="0.8" opacity=".28"/>
+ </g>
+ <circle cx="312" cy="470" r="112" fill="url(#fjGlow)"/>
+ <circle cx="312" cy="470" r="19" fill="#ffe8c4" opacity=".8"/>
+ <g fill="#ffffff" opacity=".07">
+  <ellipse cx="96" cy="430" rx="130" ry="6"/><ellipse cx="300" cy="452" rx="115" ry="5"/>
+ </g>
+ <!-- Fuji: puncak di sepertiga atas, tapak berakhir di garis air -->
+ <path d="M -60 590 C 26 560, 92 508, 150 436 C 170 411, 183 398, 195 398
+          L 213 398 C 225 398, 238 411, 258 436 C 316 508, 382 560, 450 590 Z" fill="url(#fjMt)"/>
+ <path d="M 167 420 C 177 407, 187 398, 195 398 L 213 398 C 221 398, 231 407, 241 420
+          C 236 423, 233 417, 228 421 C 223 425, 219 418, 214 422
+          C 209 426, 205 419, 200 423 C 195 427, 191 419, 186 423
+          C 181 427, 177 419, 172 423 C 169 425, 169 422, 167 420 Z" fill="#eef4fb" opacity=".95"/>
+ <!-- garis air + pantulan -->
+ <rect y="590" width="390" height="254" fill="#050d1a"/>
+ <path d="M -60 590 C 26 618, 92 664, 150 730 C 170 752, 183 764, 195 764
+          L 213 764 C 225 764, 238 752, 258 730 C 316 664, 382 618, 450 590 Z"
+       fill="url(#fjRef)" opacity=".45"/>
+ <g opacity=".2" fill="#ffe8c4">
+  <rect x="288" y="612" width="48" height="2.5" rx="1.2"/>
+  <rect x="296" y="628" width="32" height="2" rx="1"/>
+  <rect x="292" y="644" width="40" height="2" rx="1"/>
+ </g>
+</svg>
+  <img class="fuji-photo" src="fuji.jpg" alt="" onerror="this.remove()">
+  <div class="lock-veil"></div>
+
+  <div class="lock-top">
     <div class="lock-logo">K</div>
     <div class="lock-title">KNM Japan 2026</div>
-    <div class="lock-sub" id="lockSub">Enter your PIN</div>
-    <div class="pindots" id="pinDots"></div>
-    <div class="keypad">
+    <div class="lock-dates">8 – 15 November</div>
+  </div>
+
+  <div class="lock-bottom">
+    <button class="lock-open" id="lockOpenBtn" onclick="lockOpen()">
+      <i class="ti ti-lock-open"></i> Tap to unlock
+    </button>
+    <div class="lock-pad" id="lockPad">
+      <div class="lock-sub" id="lockSub">Enter your PIN</div>
+      <div class="pindots" id="pinDots"></div>
+      <div class="keypad">
       <button class="key" onclick="lockKey('1')">1</button>
       <button class="key" onclick="lockKey('2')">2</button>
       <button class="key" onclick="lockKey('3')">3</button>
@@ -443,10 +548,10 @@ nav{position:fixed;bottom:0;left:0;right:0;max-width:520px;margin:0 auto;
       <button class="key" onclick="lockKey('9')">9</button>
       <button class="key alt" onclick="lockClear()">C</button>
       <button class="key" onclick="lockKey('0')">0</button>
-      <button class="key alt" onclick="lockBack()">⌫</button>
+        <button class="key alt" onclick="lockBack()">⌫</button>
+      </div>
+      <button class="lock-go" id="lockGo" onclick="lockSubmit()" disabled>Enter</button>
     </div>
-    <button class="lock-go" id="lockGo" onclick="lockSubmit()" disabled>Enter</button>
-    <div class="lock-note" id="lockNote">Forgotten it? Ask Hazwan to reset your PIN.</div>
   </div>
 </div>
 
@@ -1408,10 +1513,15 @@ function lockNeeded(){
   return rows("Members").some(r=>r.pin);         // ada sekurang-kurangnya satu PIN
 }
 function maybeWelcome(){ if(lockNeeded())showLock(); }
+function lockOpen(){
+  const el=$("#lockScreen");if(!el)return;
+  el.classList.add("open");
+  lockDots();lockSay("Enter your PIN");
+}
 function showLock(){
   LOCK_BUF="";LOCK_FAILS=0;
   const el=$("#lockScreen");if(!el)return;
-  el.classList.remove("hidden");
+  el.classList.remove("hidden");el.classList.remove("open");
   document.body.style.overflow="hidden";
   lockDots();lockSay("Enter your PIN");
 }
