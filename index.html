@@ -815,24 +815,20 @@ async function showPrayer(){
       </div>
       <div id="prayBody" style="overflow-y:auto"><div class="empty"><span class="spin"></span><br>Loading…</div></div>
     </div></div>`;
-  const jn=jstNow(),mn=mytNow();
+  const jn=jstNow();
   let html="";
-  // Japan — ikut koordinat stop semasa
-  try{
-    if(lat&&lng){
+  if(!lat||!lng){
+    html='<div class="empty">No coordinates for this stop.</div>';
+  }else{
+    try{
       const t=await timingsFor(lat,lng,jn);
-      html+=`<div class="sect-label" style="margin-top:0">🇯🇵 ${esc(loc)} · JST</div>`+prayTable(t);
-    }else{
-      html+=`<div class="sect-label" style="margin-top:0">🇯🇵 Japan</div><div class="binfo">No coordinates for this stop.</div>`;
+      html=`<div class="sect-label" style="margin-top:0">${esc(loc)} · JST</div>`+prayTable(t)+
+        `<div class="link-row" style="margin-top:12px" onclick="openLink('${mapsSearch("mosque musholla near "+loc)}')"><i class="ti ti-building-mosque" style="color:#0F6E56"></i><span>Mosques and prayer rooms nearby</span><i class="ti ti-external-link" style="color:var(--hint)"></i></div>`+
+        `<div class="binfo" style="margin-top:8px">Method: Muslim World League · times follow the coordinates of the current stop, and update as the trip moves.</div>`;
+    }catch(e){
+      html='<div class="empty">Prayer times could not be retrieved. An internet connection is required.</div>';
     }
-  }catch(e){html+=`<div class="sect-label" style="margin-top:0">🇯🇵 Japan</div><div class="binfo">Could not load — internet required.</div>`;}
-  // Malaysia — Kuala Lumpur
-  try{
-    const t2=await timingsFor(3.139,101.6869,mn);
-    html+=`<div class="sect-label">🇲🇾 Kuala Lumpur · MYT</div>`+prayTable(t2);
-  }catch(e){html+=`<div class="sect-label">🇲🇾 Kuala Lumpur</div><div class="binfo">Could not load — internet required.</div>`;}
-  html+=`<div class="link-row" style="margin-top:12px" onclick="openLink('https://www.e-solat.gov.my/')"><i class="ti ti-building-mosque" style="color:#0F6E56"></i><span>e-Solat JAKIM (official Malaysia)</span><i class="ti ti-external-link" style="color:var(--hint)"></i></div>`;
-  html+=`<div class="binfo" style="margin-top:8px">Method: Muslim World League. Japan times follow the current stop's coordinates; Malaysia times are for Kuala Lumpur.</div>`;
+  }
   $("#prayBody").innerHTML=html;
 }
 
@@ -1025,7 +1021,7 @@ function renderMore(){
     <div class="link-row" onclick="showBudget()"><i class="ti ti-receipt" style="color:#7a72d6"></i><span>Full budget breakdown</span><i class="ti ti-chevron-right" style="color:var(--hint)"></i></div>
 
     <div class="sect-label">Tools</div>
-    <div class="link-row" onclick="showPrayer()"><i class="ti ti-building-mosque" style="color:#0F6E56"></i><span>Prayer times &amp; sun · JP + MY</span><i class="ti ti-chevron-right" style="color:var(--hint)"></i></div>
+    <div class="link-row" onclick="showPrayer()"><i class="ti ti-building-mosque" style="color:#0F6E56"></i><span>Prayer times &amp; sun</span><i class="ti ti-chevron-right" style="color:var(--hint)"></i></div>
     <div class="link-row" onclick="showTrains()"><i class="ti ti-train" style="color:var(--navy2)"></i><span>Trains — search &amp; booking</span><i class="ti ti-chevron-right" style="color:var(--hint)"></i></div>
     <div class="link-row" onclick="showCurrency()"><i class="ti ti-currency-yen" style="color:#534AB7"></i><span>Currency converter (¥ ⇄ RM)</span><i class="ti ti-chevron-right" style="color:var(--hint)"></i></div>
     <div class="link-row" onclick="showHalal()"><i class="ti ti-tools-kitchen-2" style="color:#c0562f"></i><span>Halal food &amp; mosques</span><i class="ti ti-chevron-right" style="color:var(--hint)"></i></div>
