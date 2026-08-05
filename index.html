@@ -842,6 +842,73 @@ function showHalal(){
   `);
 }
 
+// ====== ROSTER / TEAM ======
+// Semua ahli nampak semua butiran (bukan data sulit). Tapi setiap orang hanya
+// boleh ubah barisnya sendiri — server yang kuatkuasakan, ikut PIN peribadi.
+function showRoster(){
+  const names=memberList(),me=meGet(),rs=rows("Roster");
+  let html="";
+  if(!names.length){modalScroll("Team",'<div class="empty">No members yet.</div>');return;}
+  names.forEach(n=>{
+    const mine=(n===me);
+    const items=rs.filter(r=>String(r.person).trim().toLowerCase()===n.toLowerCase());
+    html+=`<div class="card" style="margin-bottom:10px${mine?";border-color:var(--navy2)":""}">
+      <div style="display:flex;align-items:center;justify-content:space-between;gap:8px">
+        <div style="font-size:14px;font-weight:700">${esc(n)}${mine?' <span style="color:var(--navy2);font-size:11px">· me</span>':''}</div>
+        ${mine?`<button class="mini" style="flex:0 0 auto;padding:5px 11px" onclick="rosterAdd()"><i class="ti ti-plus"></i> add</button>`:""}
+      </div>`;
+    if(!items.length){
+      html+=`<div class="binfo" style="margin-top:6px">${mine?"Nothing yet — add your seat, room, or what you are carrying.":"Nothing added yet."}</div>`;
+    }else{
+      items.forEach(r=>{
+        html+=`<div class="irow"><span class="k">${esc(r.item)}</span><span class="v">${esc(r.value)}`;
+        if(mine)html+=` <button class="mini" style="display:inline-flex;flex:0 0 auto;padding:2px 7px;margin-left:6px" onclick="rosterAdd('${jsq(r.item)}','${jsq(r.value)}')"><i class="ti ti-edit"></i></button>`+
+                      `<button class="mini" style="display:inline-flex;flex:0 0 auto;padding:2px 7px;margin-left:4px" onclick="rosterRemove('${jsq(r.item)}')"><i class="ti ti-trash" style="color:var(--red)"></i></button>`;
+        html+=`</span></div>`;
+      });
+    }
+    html+=`</div>`;
+  });
+  if(!me)html+='<div class="rem-item soft"><i class="ti ti-info-circle"></i><span>Choose your name on the Expenses tab to add your own details.</span></div>';
+  else html+=`<button class="mini" style="width:100%;padding:10px;margin-top:4px" onclick="meSignOut()">Sign out of ${esc(me)}</button>`;
+  html+='<div class="binfo" style="margin-top:10px">Everyone can see these. You can only change your own — do not put passport or card numbers here.</div>';
+  modalScroll("Team &amp; my details",html);
+}
+function rosterAdd(item,value){
+  const me=meGet();
+  if(!me){toast("Choose your name first");return;}
+  $("#modalMount2").innerHTML=`<div class="overlay" style="z-index:150" onclick="if(event.target===this)closePin()">
+    <div class="modal" style="max-width:360px">
+      <h3>${item?"Edit detail":"Add detail"}</h3>
+      <label class="field-label">Item</label>
+      <input id="rItem" value="${esc(item||"")}" placeholder="e.g. Seat, Room, Carrying" ${item?"readonly":""}>
+      <label class="field-label">Value</label>
+      <input id="rVal" value="${esc(value||"")}" placeholder="e.g. 12A" onkeydown="if(event.key==='Enter')rosterSave()">
+      <div class="modal-row">
+        <button class="mbtn ghost" onclick="closePin()">Cancel</button>
+        <button class="mbtn primary" onclick="rosterSave()">Save</button>
+      </div>
+    </div></div>`;
+  setTimeout(()=>{const el=$(item?"#rVal":"#rItem");if(el)el.focus();},80);
+}
+async function rosterSave(){
+  const me=meGet(),item=($("#rItem").value||"").trim(),value=($("#rVal").value||"").trim();
+  if(!item){toast("Enter an item");return;}
+  const pin=mePin()||(ADMIN?ADMIN_PIN:"");
+  if(!pin){closePin();toast("Set a personal PIN in the Members tab first");return;}
+  closePin();
+  const j=await apiPost({action:"rosterSave",who:me,pin:pin,item:item,value:value},pin);
+  if(j.ok){await refresh(false);showRoster();toast("Saved");}
+  else toast(j.error||"Could not save");
+}
+async function rosterRemove(item){
+  const me=meGet(),pin=mePin()||(ADMIN?ADMIN_PIN:"");
+  if(!pin){toast("Set a personal PIN in the Members tab first");return;}
+  const j=await apiPost({action:"rosterDelete",who:me,pin:pin,item:item},pin);
+  if(j.ok){await refresh(false);showRoster();toast("Removed");}
+  else toast(j.error||"Could not remove");
+}
+
 // ====== FLIGHTS ======
 // Semua data dari tab Info, category = "Flight". Tambah baris baru dalam Sheet
 // (atau butang Admin bawah) untuk seat, bagasi, dsb — terus keluar di sini.
@@ -1028,6 +1095,7 @@ function renderMore(){
     <div class="link-row" onclick="openLink('${mapsSearch("convenience store near me")}')"><i class="ti ti-building-store" style="color:#7c7b76"></i><span>Convenience store</span><i class="ti ti-external-link" style="color:var(--hint)"></i></div>
 
     <div class="sect-label">Information &amp; assistance</div>
+    <div class="link-row" onclick="showRoster()"><i class="ti ti-users" style="color:#0F6E56"></i><span>Team &amp; my details</span><i class="ti ti-chevron-right" style="color:var(--hint)"></i></div>
     <div class="link-row" onclick="showFlights()"><i class="ti ti-plane" style="color:var(--navy2)"></i><span>Flights — details &amp; check-in</span><i class="ti ti-chevron-right" style="color:var(--hint)"></i></div>
     <div class="link-row" onclick="showInfo()"><i class="ti ti-info-circle" style="color:#7a72d6"></i><span>All trip info</span><i class="ti ti-chevron-right" style="color:var(--hint)"></i></div>
     <div class="link-row" onclick="showEmergency()"><i class="ti ti-urgent" style="color:var(--red)"></i><span>Emergency (embassy, hospital, insurance)</span><i class="ti ti-chevron-right" style="color:var(--hint)"></i></div>
@@ -1094,13 +1162,42 @@ function modalScroll(title,body){
 // second calculation path anywhere (lesson from the Ketravelan "(DB)" label).
 // A settlement is just an expense row: category "Settlement", payer = pengirim,
 // split 100% to penerima — append-only history for free.
-const ME_KEY="knm_me", EXPPIN_KEY="knm_exp_pin";
+const ME_KEY="knm_me", EXPPIN_KEY="knm_exp_pin", MEPIN_KEY="knm_me_pin";
 const CATS=[["Transport","🚆"],["Accommodation","🏨"],["Food","🍜"],["Activities","🎫"],["Shopping","🛍️"],["Other","💠"]];
 const CAT_ICON=Object.fromEntries(CATS);CAT_ICON["Settlement"]="🤝";
 // keep the earlier Malay labels mapped so rows written before the rename still show an icon
 Object.assign(CAT_ICON,{Hotel:"🏨",Makan:"🍜",Aktiviti:"🎫",Lain:"💠"});
 function meGet(){try{return localStorage.getItem(ME_KEY)||"";}catch(e){return "";}}
-function meSet(n){try{localStorage.setItem(ME_KEY,n);}catch(e){}renderMoney();}
+function meStore(n){try{localStorage.setItem(ME_KEY,n);}catch(e){}}
+// Kalau ahli tu ada PIN peribadi (server hantar penanda sahaja, bukan PIN),
+// minta PIN dulu supaya tak tersilap pilih nama orang lain.
+function meSet(n){
+  const m=rows("Members").find(r=>String(r.name).trim()===n);
+  if(m&&m.pin){askMePin(n);return;}
+  meStore(n);renderAll();
+}
+function askMePin(n){
+  $("#modalMount2").innerHTML=`<div class="overlay" style="z-index:150" onclick="if(event.target===this)closePin()">
+    <div class="modal" style="max-width:340px">
+      <h3>${esc(n)}</h3>
+      <p>Enter your personal PIN to confirm it is you.</p>
+      <div class="err hidden" id="meErr">Name or PIN does not match</div>
+      <input type="password" inputmode="numeric" id="mePinInput" onkeydown="if(event.key==='Enter')meVerify('${jsq(n)}')">
+      <div class="modal-row">
+        <button class="mbtn ghost" onclick="closePin()">Cancel</button>
+        <button class="mbtn primary" onclick="meVerify('${jsq(n)}')">Confirm</button>
+      </div>
+    </div></div>`;
+  setTimeout(()=>$("#mePinInput")&&$("#mePinInput").focus(),80);
+}
+async function meVerify(n){
+  const pin=($("#mePinInput").value||"").trim();if(!pin)return;
+  const j=await apiPost({action:"whoami",who:n,pin:pin},pin);
+  if(j.ok){try{localStorage.setItem(MEPIN_KEY,pin);}catch(e){}meStore(j.name);closePin();renderAll();toast("Signed in as "+j.name);}
+  else{const e1=$("#meErr");if(e1){e1.classList.remove("hidden");e1.textContent=j.error||"Name or PIN does not match";}}
+}
+function mePin(){try{return localStorage.getItem(MEPIN_KEY)||"";}catch(e){return "";}}
+function meSignOut(){try{localStorage.removeItem(ME_KEY);localStorage.removeItem(MEPIN_KEY);}catch(e){}renderAll();toast("Signed out");}
 function memberList(){return rows("Members").map(r=>String(r.name||"").trim()).filter(Boolean);}
 function expensesAll(){return rows("Expenses").filter(r=>r.id);}
 function moneyReady(){return !!(DATA.Expenses&&DATA.Expenses.length)&&!!(DATA.Members&&DATA.Members.length);}
@@ -1135,19 +1232,33 @@ function balances(){
   });
   return net;
 }
-// fewest-transfer suggestion (greedy)
+// Cadangan transfer paling sedikit (greedy).
+// Dikira dalam SEN (integer) — bukan perpuluhan. Sebabnya: kalau setiap baki
+// dibundarkan berasingan, jumlah hutang & piutang boleh beza satu sen, dan sen
+// itu tergantung selamanya (takkan boleh settle habis). Dengan integer sen,
+// jumlah keluar = jumlah masuk, tepat.
 function settleSuggest(){
   const net=balances();
+  const names=Object.keys(net);
+  if(!names.length)return [];
+  const sen={};names.forEach(n=>{sen[n]=Math.round((net[n]||0)*100);});
+  // Baki pembundaran diserap oleh baki terbesar, supaya jumlahnya tepat sifar.
+  let resid=names.reduce((s,n)=>s+sen[n],0);
+  if(resid!==0){
+    let big=names[0];
+    names.forEach(n=>{if(Math.abs(sen[n])>Math.abs(sen[big]))big=n;});
+    sen[big]-=resid;
+  }
   const cred=[],debt=[];
-  Object.keys(net).forEach(n=>{const v=Math.round(net[n]*100)/100;
-    if(v>0.01)cred.push({n:n,v:v});else if(v<-0.01)debt.push({n:n,v:-v});});
+  names.forEach(n=>{if(sen[n]>0)cred.push({n:n,v:sen[n]});else if(sen[n]<0)debt.push({n:n,v:-sen[n]});});
   cred.sort((a,b)=>b.v-a.v);debt.sort((a,b)=>b.v-a.v);
   const out=[];let i=0,j=0;
   while(i<debt.length&&j<cred.length){
     const amt=Math.min(debt[i].v,cred[j].v);
-    out.push({from:debt[i].n,to:cred[j].n,amt:Math.round(amt*100)/100});
+    if(amt>0)out.push({from:debt[i].n,to:cred[j].n,amt:amt/100});
     debt[i].v-=amt;cred[j].v-=amt;
-    if(debt[i].v<=0.01)i++;if(cred[j].v<=0.01)j++;
+    if(debt[i].v===0)i++;
+    if(cred[j].v===0)j++;
   }
   return out;
 }
