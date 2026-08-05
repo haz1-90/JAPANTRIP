@@ -119,9 +119,9 @@ function doPost(e) {
       if (!om) return json({ ok:false, error:'Format gambar tak sah' });
       const obytes = Utilities.base64Decode(om[2]);
       if (obytes.length > 10 * 1024 * 1024) return json({ ok:false, error:'Gambar terlalu besar' });
-      const text = ocrText_(Utilities.newBlob(obytes, om[1], 'scan.jpg'), body.lang || 'ja');
-      if (text === null) return json({ ok:false, error:'OCR gagal — cuba gambar lebih jelas' });
-      return json({ ok:true, text: text, parsed: parseReceipt_(text) });
+      const r = ocrText_(Utilities.newBlob(obytes, om[1], 'scan.jpg'), body.lang || 'auto');
+      if (r.err) return json({ ok:false, error:'OCR: ' + r.err });
+      return json({ ok:true, text: r.text, parsed: parseReceipt_(r.text) });
     }
 
     if (TABS.indexOf(tab) === -1) return json({ ok:false, error:'Tab tak sah' });
@@ -197,20 +197,45 @@ function ocrText_(blob, lang) {
         payload: bytes,
         headers: { Authorization: 'Bearer ' + token },
         muteHttpExceptions: true });
-    if (up.getResponseCode() >= 300) { log_('ocrFail', 'upload', up.getResponseCode()); return null; }
+    if (up.getResponseCode() >= 300) {
+      log_('ocrFail', 'upload ' + up.getResponseCode(), '');
+      return { err: 'upload ' + up.getResponseCode() + ' — ' + up.getContentText().slice(0, 160) };
+    }
     const id = JSON.parse(up.getContentText()).id;
-    if (!id) return null;
+    if (!id) return { err: 'tiada file id' };
 
     const ex = UrlFetchApp.fetch(
       'https://www.googleapis.com/drive/v3/files/' + id + '/export?mimeType=text/plain',
       { headers: { Authorization: 'Bearer ' + token }, muteHttpExceptions: true });
-    const txt = ex.getResponseCode() < 300 ? ex.getContentText() : null;
+    const code = ex.getResponseCode();
+    const txt = code < 300 ? ex.getContentText() : null;
     try { DriveApp.getFileById(id).setTrashed(true); } catch (e) {}
-    return txt;
+    if (txt === null) return { err: 'export ' + code + ' — ' + ex.getContentText().slice(0, 160) };
+    if (!String(txt).trim()) return { err: 'tiada teks dikesan — cuba gambar lebih terang/dekat' };
+    return { text: txt };
   } catch (err) {
     log_('ocrFail', String(err).slice(0, 80), '');
-    return null;
+    return { err: String(err).slice(0, 180) };
   }
+}
+
+// ---- JALANKAN SEKALI dari editor selepas paste kod baru ----
+// Tujuan: paksa skrin kebenaran untuk Drive + permintaan luar. Web app TIDAK
+// boleh papar skrin kebenaran sendiri, jadi kalau langkah ini dilangkau,
+// scan resit akan gagal walaupun kod betul.
+function authorize() {
+  var out = [];
+  try { out.push('Folder resit: ' + receiptFolder_().getName()); }
+  catch (e) { out.push('Drive GAGAL: ' + e); }
+  try {
+    var res = UrlFetchApp.fetch('https://www.googleapis.com/drive/v3/about?fields=user',
+      { headers: { Authorization: 'Bearer ' + ScriptApp.getOAuthToken() }, muteHttpExceptions: true });
+    out.push('Drive API: HTTP ' + res.getResponseCode());
+    if (res.getResponseCode() >= 300) out.push(res.getContentText().slice(0, 200));
+  } catch (e) { out.push('UrlFetch GAGAL: ' + e); }
+  var msg = out.join(' | ');
+  Logger.log(msg);
+  return msg;
 }
 
 // ---- Cuba teka jumlah / kedai / tarikh dari teks resit ----

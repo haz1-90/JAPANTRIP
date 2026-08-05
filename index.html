@@ -1269,8 +1269,15 @@ function scanReceipt(){
   if(st)st.innerHTML='<span class="spin"></span> Reading receipt…';
   withExpPin(async function(pin){
     const j=await apiPost({action:"ocrReceipt",dataUrl:EF.imgData,lang:"auto"},pin);
-    if(!j.ok){showReceiptState('<span style="color:var(--amber)">Could not read it — please enter the details manually.</span>');
-      if(/PIN/i.test(j.error||"")){try{localStorage.removeItem(EXPPIN_KEY);}catch(e){}}
+    if(!j.ok){
+      const err=String(j.error||"unknown error");
+      // Surface the real reason: "Action tak dikenali" means the server is still
+      // running the old Code.gs; a 403 means Drive access was never authorised.
+      let hint="";
+      if(/Action tak dikenali/i.test(err))hint=" — the server is still running the old Code.gs. Paste the latest version and redeploy.";
+      else if(/\b40[13]\b|permission|scope|authoriz/i.test(err))hint=" — run the authorize() function once in the Apps Script editor, then try again.";
+      showReceiptState('<span style="color:var(--amber)">Could not read it. '+esc(err)+esc(hint)+'</span>');
+      if(/PIN/i.test(err)){try{localStorage.removeItem(EXPPIN_KEY);}catch(e){}}
       return;}
     const p=j.parsed||{};const got=[];
     if(p.total){
