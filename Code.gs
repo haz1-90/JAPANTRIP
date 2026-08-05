@@ -187,8 +187,11 @@ function ocrText_(blob, lang) {
     ).getBytes();
     bytes = bytes.concat(blob.getBytes()).concat(Utilities.newBlob('\r\n--' + boundary + '--').getBytes());
 
+    // Biar Drive kesan bahasa sendiri. Kalau dipaksa 'ja', teks rumi (English/BM)
+    // jadi teruk; auto-detect boleh baca Jepun DAN rumi.
+    const langQ = (lang && lang !== 'auto') ? ('&ocrLanguage=' + encodeURIComponent(lang)) : '';
     const up = UrlFetchApp.fetch(
-      'https://www.googleapis.com/upload/drive/v3/files?uploadType=multipart&ocrLanguage=' + encodeURIComponent(lang),
+      'https://www.googleapis.com/upload/drive/v3/files?uploadType=multipart' + langQ,
       { method: 'post',
         contentType: 'multipart/related; boundary=' + boundary,
         payload: bytes,
@@ -220,8 +223,8 @@ function parseReceipt_(text) {
     return isFinite(n) ? n : null;
   }
   // Label "jumlah" dalam BJ / BM / BI. 小計/subtotal sengaja TIDAK diambil.
-  const TOTAL = /(合\s*計|お?会計|税込\s*合?計|総額|お買上げ?計|grand\s*total|total\s*amount|jumlah|^total\b)/i;
-  const SUB   = /(小\s*計|subtotal|sub\s*total|お預り|おつり|釣銭|change|tunai|cash)/i;
+  const TOTAL = /(合\s*計|お?会計|税込\s*合?計|総額|お買上げ?計|grand\s*total|nett?\s*total|total\s*(amount|due|payable)?|amount\s*(due|payable)|balance\s*due|jumlah|bayar)/i;
+  const SUB   = /(小\s*計|subtotal|sub\s*total|お預り|おつり|釣銭|change|tunai|cash|tendered|rounding|discount|tax|消費税|税)/i;
 
   let best = null;
   for (let i = 0; i < lines.length; i++) {
@@ -229,7 +232,7 @@ function parseReceipt_(text) {
     if (SUB.test(L)) continue;
     if (!TOTAL.test(L)) continue;
     // nombor pada baris sama, kalau tiada cuba baris berikut
-    let m = L.match(/(?:¥|￥|RM|MYR)?\s*([0-9][0-9,]*(?:\.[0-9]{1,2})?)/g);
+    let m = L.match(/(?:¥|￥|RM|MYR|\$|USD)?\s*([0-9][0-9,]*(?:\.[0-9]{1,2})?)/g);
     let cand = null;
     if (m && m.length) cand = num(m[m.length - 1].replace(/[^\d.,]/g, ''));
     if (cand == null && lines[i + 1]) {
@@ -239,13 +242,19 @@ function parseReceipt_(text) {
     if (cand != null && cand > 0) { best = cand; if (/¥|￥|円/.test(L)) out.currency = 'JPY';
                                     if (/RM|MYR/i.test(L)) out.currency = 'MYR'; }
   }
-  // Tiada label jumpa → ambil nombor harga terbesar sebagai anggaran
+  // Tiada label jumpa → ambil nombor harga terbesar sebagai anggaran.
+  // Terima simbol mata wang (¥ RM $) ATAU nombor berdesimal 2 angka (12.50),
+  // supaya resit English/tanpa simbol pun boleh dibaca.
   if (best == null) {
     let mx = 0;
     lines.forEach(function (L) {
       if (SUB.test(L)) return;
-      const all = L.match(/(?:¥|￥|RM)\s*([0-9][0-9,]*(?:\.[0-9]{1,2})?)/g) || [];
-      all.forEach(function (a) { const v = num(a.replace(/[^\d.,]/g, '')); if (v && v > mx) mx = v; });
+      const sym = L.match(/(?:¥|￥|RM|MYR|\$)\s*([0-9][0-9,]*(?:\.[0-9]{1,2})?)/g) || [];
+      sym.forEach(function (a) { const v = num(a.replace(/[^\d.,]/g, '')); if (v && v > mx) mx = v; });
+      if (!sym.length) {
+        const dec = L.match(/\b[0-9][0-9,]*\.[0-9]{2}\b/g) || [];
+        dec.forEach(function (a) { const v = num(a); if (v && v > mx) mx = v; });
+      }
     });
     if (mx > 0) best = mx;
   }
@@ -258,7 +267,9 @@ function parseReceipt_(text) {
     const L = lines[i];
     if (L.length < 2 || L.length > 40) continue;
     if (/^[\d\s\-\/:.,¥￥円]+$/.test(L)) continue;
-    if (/(tel|電話|〒|receipt|領収|レシート|invoice)/i.test(L)) continue;
+    // \b penting: tanpa sempadan perkataan, "HOTEL" akan padan "tel" dan
+    // nama hotel jadi terlangkau.
+    if (/(\btel\b|\btel[:.\s]*\+?[0-9]|電話|〒|\breceipt\b|領収|レシート|\binvoice\b)/i.test(L)) continue;
     out.title = L; break;
   }
   const d = text.match(/(20\d{2})[\/\-年](\d{1,2})[\/\-月](\d{1,2})/);

@@ -1268,7 +1268,7 @@ function scanReceipt(){
   const st=$("#efRcptState");
   if(st)st.innerHTML='<span class="spin"></span> Reading receipt…';
   withExpPin(async function(pin){
-    const j=await apiPost({action:"ocrReceipt",dataUrl:EF.imgData,lang:"ja"},pin);
+    const j=await apiPost({action:"ocrReceipt",dataUrl:EF.imgData,lang:"auto"},pin);
     if(!j.ok){showReceiptState('<span style="color:var(--amber)">Could not read it — please enter the details manually.</span>');
       if(/PIN/i.test(j.error||"")){try{localStorage.removeItem(EXPPIN_KEY);}catch(e){}}
       return;}
