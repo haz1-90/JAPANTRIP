@@ -361,9 +361,14 @@ let curDay = null;
 const $ = s => document.querySelector(s);
 function toast(m){const t=$("#toast");t.textContent=m;t.classList.add("show");setTimeout(()=>t.classList.remove("show"),2200);}
 function esc(s){return String(s==null?"":s).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));}
+// For values inside onclick="fn('...')": entities decode BEFORE the JS parses,
+// so quotes must also be backslash-escaped at the JS layer or they break the call.
+function jsq(s){return esc(String(s==null?"":s).replace(/\\/g,"\\\\").replace(/'/g,"\\'").replace(/\r?\n/g," "));}
 function rows(tab){const d=DATA[tab];if(!d||d.length<2)return[];const h=d[0];return d.slice(1).map((r,i)=>{const o={_row:i+2};h.forEach((k,j)=>o[k]=r[j]);return o;});}
 function headers(tab){return (DATA[tab]&&DATA[tab][0])||[];}
-function mapsSearch(q){return "https://www.google.com/maps/search/?api=1&query="+encodeURIComponent(q);}
+// encodeURIComponent leaves ' unescaped, which breaks onclick='openLink()' strings — force %27
+function uenc(s){return encodeURIComponent(String(s==null?"":s)).replace(/'/g,"%27");}
+function mapsSearch(q){return "https://www.google.com/maps/search/?api=1&query="+uenc(q);}
 function mapsDir(lat,lng,name){if(lat&&lng)return "https://www.google.com/maps/dir/?api=1&destination="+lat+","+lng;return mapsSearch(name||"");}
 function openLink(u){window.open(u,"_blank");}
 
@@ -406,7 +411,7 @@ function showPinModal(){
       <h3>Admin mode</h3>
       <p>Enter your PIN to edit the trip.</p>
       <div class="err hidden" id="pinErr">Wrong PIN</div>
-      <input type="password" inputmode="numeric" id="pinInput" placeholder="PIN" autofocus>
+      <input type="password" inputmode="numeric" id="pinInput" placeholder="PIN" autofocus onkeydown="if(event.key==='Enter')submitPin()">
       <div class="modal-row">
         <button class="mbtn ghost" onclick="closeModal()">Cancel</button>
         <button class="mbtn primary" onclick="submitPin()">Unlock</button>
@@ -427,10 +432,13 @@ function closeModal(){$("#modalMount").innerHTML="";}
 
 // ====== WRITE (via Apps Script) ======
 async function apiPost(payload){
-  payload.pin=ADMIN_PIN;
-  const r=await fetch(API_URL,{method:"POST",body:JSON.stringify(payload)});
-  const j=await r.json();
-  return j;
+  try{
+    payload.pin=ADMIN_PIN;
+    const r=await fetch(API_URL,{method:"POST",body:JSON.stringify(payload)});
+    return await r.json();
+  }catch(e){
+    return {ok:false,error:"Offline — edit tak dihantar. Cuba lagi bila online."};
+  }
 }
 async function setStatus(tab,id,status){
   if(!ADMIN){toast("Admin only");return;}
@@ -500,7 +508,7 @@ function tripActive(){
 }
 function fmtMin(m){m=((Math.round(m)%1440)+1440)%1440;let h=Math.floor(m/60),mm=m%60,ap=h<12?"AM":"PM",hh=h%12;if(hh===0)hh=12;return hh+":"+String(mm).padStart(2,"0")+" "+ap;}
 function fmtDur(m){m=Math.max(0,Math.round(m));const h=Math.floor(m/60),mm=m%60;if(h&&mm)return h+"h "+mm+"m";if(h)return h+"h";return mm+"m";}
-function dayList(day){return rows("Itinerary").filter(r=>r.day===day);}
+function dayList(day){return rows("Itinerary").filter(r=>String(r.day)===String(day));}
 function nextAnchor(list,fromIdx){
   for(let i=fromIdx;i<list.length;i++){
     const r=list[i],t=parseTimeToMin(r.time);
@@ -602,20 +610,14 @@ function dayPace(day){
 function renderToday(){
   const it=rows("Itinerary");
   if(!it.length){$("#todayBody").innerHTML='<div class="empty">No itinerary yet.</div>';return;}
-  // find "today" by matching date to now; fallback: first not-done urgent, else day 1
-  const now=new Date();
-  const monthMap={Nov:10};
+  // next stop = first non-done row
   let todays=it.filter(r=>String(r.status).toLowerCase()!=="done");
-  // next stop = first non-done
   let next=todays[0]||it[0];
   const ico=TYPE_ICON[next.type]||"ti-map-pin",col=TYPE_COLOR[next.type]||"#185FA5";
   const nmode=stopMode(next),nmeta=MODE_META[nmode];
-  let statusPill="";
-  // reminders for the day of 'next'
   const dayNum=next.day;
-  const rem=rows("Reminders");
   let remHtml="";
-  const dayRem=it.filter(r=>r.day===dayNum&&String(r.urgent).toUpperCase()==="YES"&&String(r.status).toLowerCase()!=="done");
+  const dayRem=it.filter(r=>String(r.day)===String(dayNum)&&String(r.urgent).toUpperCase()==="YES"&&String(r.status).toLowerCase()!=="done");
   dayRem.slice(0,3).forEach(r=>{
     remHtml+=`<div class="rem-item"><i class="ti ti-alarm"></i><span>${esc(r.time)} · ${esc(r.activity)}</span></div>`;
   });
@@ -623,7 +625,7 @@ function renderToday(){
 
   const transit=next.transit_info?`<div class="transit"><i class="ti ti-arrow-guide"></i>${esc(next.transit_info)}</div>`:"";
   const notes=next.notes?`<div class="tl-notes">${esc(next.notes)}</div>`:"";
-  const doneBtn=ADMIN?`<button class="bigbtn" onclick="markDone('${esc(next.id)}')"><i class="ti ti-check"></i>Mark done · next stop</button>`:"";
+  const doneBtn=ADMIN?`<button class="bigbtn" onclick="markDone('${jsq(next.id)}')"><i class="ti ti-check"></i>Mark done · next stop</button>`:"";
   const pill=pacePill(next);
 
   $("#todayBody").innerHTML=`
@@ -675,7 +677,7 @@ function stopMode(r){
 }
 function mapsDirMode(lat,lng,name,mode){
   const mm=MODE_META[mode]||MODE_META.transit;
-  const dest=(lat&&lng)?(lat+","+lng):encodeURIComponent(name||"");
+  const dest=(lat&&lng)?(lat+","+lng):uenc(name||"");
   return "https://www.google.com/maps/dir/?api=1&destination="+dest+"&travelmode="+mm.travel;
 }
 function parkingNear(name,lat,lng){
@@ -759,15 +761,16 @@ function editInfoRow(row){const r=findByRow("Info",row);if(r)openEditForm("Info"
 // ====== TRIP ======
 function renderTrip(){
   const it=rows("Itinerary");
-  const days=[...new Set(it.map(r=>r.day))].filter(d=>d!=null);
+  // compare days as strings: an edited row may come back "2" while others are 2
+  const days=[...new Set(it.map(r=>String(r.day)))].filter(d=>d!==""&&d!=="null"&&d!=="undefined");
   if(curDay==null)curDay=days[0];
   $("#dayTabs").innerHTML=days.map(d=>{
-    const dt=it.find(r=>r.day===d);
-    return `<button class="daytab ${d===curDay?'on':''}" onclick="setDay(${d})">Day ${d}<br><span style="font-size:10px;opacity:.8">${esc(dt?dt.date:'')}</span></button>`;
+    const dt=it.find(r=>String(r.day)===d);
+    return `<button class="daytab ${d===String(curDay)?'on':''}" onclick="setDay('${jsq(d)}')">Day ${esc(d)}<br><span style="font-size:10px;opacity:.8">${esc(dt?dt.date:'')}</span></button>`;
   }).join("");
-  const list=it.filter(r=>r.day===curDay);
+  const list=it.filter(r=>String(r.day)===String(curDay));
   const activeDay=(it.find(r=>String(r.status).toLowerCase()!=="done")||{}).day;
-  const paceOn=ADMIN&&tripActive()&&paceMode()==="flex"&&curDay===activeDay;
+  const paceOn=ADMIN&&tripActive()&&paceMode()==="flex"&&String(curDay)===String(activeDay);
   const pace=paceOn?dayPace(curDay):null;
   let html=paceOn?'<div class="binfo" style="margin:0 0 11px">Auto-paced for today · suggested times shift with the clock (fixed points locked).</div>':'';
   html+='<div class="tl">';
@@ -782,9 +785,9 @@ function renderTrip(){
     const rmode=stopMode(r),rmeta=MODE_META[rmode],dirUrl=mapsDirMode(r.lat,r.lng,r.location,rmode);
     const admin=ADMIN?`<div class="tl-actions">
         <button class="mini" onclick="openLink('${dirUrl}')"><i class="ti ${rmeta.icon}" style="color:var(--navy2)"></i></button>
-        <button class="mini" onclick="editItin('${esc(r.id)}')"><i class="ti ti-edit"></i></button>
-        <button class="mini" onclick="confirmDel('Itinerary',${r._row},'${esc(r.activity)}')"><i class="ti ti-trash" style="color:var(--red)"></i></button>
-        <button class="mini" onclick="toggleDone('${esc(r.id)}','${done?'':'done'}')"><i class="ti ti-check" style="color:${done?'#B4B2A9':'#0F6E56'}"></i></button>
+        <button class="mini" onclick="editItin('${jsq(r.id)}')"><i class="ti ti-edit"></i></button>
+        <button class="mini" onclick="confirmDel('Itinerary',${r._row},'${jsq(r.activity)}')"><i class="ti ti-trash" style="color:var(--red)"></i></button>
+        <button class="mini" onclick="toggleDone('${jsq(r.id)}','${done?'':'done'}')"><i class="ti ti-check" style="color:${done?'#B4B2A9':'#0F6E56'}"></i></button>
       </div>`
       :`<div class="tl-actions"><button class="mini" onclick="openLink('${dirUrl}')"><i class="ti ${rmeta.icon}" style="color:var(--navy2)"></i> <span style="font-size:11px">${rmeta.label}</span></button>${rmode==="drive"?`<button class="mini" onclick="openLink('${parkingNear(r.location,r.lat,r.lng)}')"><i class="ti ti-parking" style="color:var(--navy2)"></i> <span style="font-size:11px">Parking</span></button>`:""}</div>`;
     html+=`<div class="tl-item ${cls}">
@@ -826,7 +829,7 @@ function renderPark(){
         <div class="pk-foot">
           <span class="pk-price">${esc(r.price_rm)?("RM"+r.price_rm):"—"}</span>
           <div style="display:flex">
-          <button class="mini" style="flex:0 0 auto;padding:6px 12px" onclick="openLink('${esc(r.maps_link||mapsSearch(r.pick))}')"><i class="ti ti-navigation" style="color:var(--navy2)"></i> Direction</button>
+          <button class="mini" style="flex:0 0 auto;padding:6px 12px" onclick="openLink('${jsq(r.maps_link||mapsSearch(r.pick))}')"><i class="ti ti-navigation" style="color:var(--navy2)"></i> Direction</button>
           ${adminBtns}
           </div>
         </div>
@@ -852,7 +855,7 @@ function renderStay(){
         <div><div class="lbl">Price</div><div class="val">RM${esc(r.price_rm)}</div></div>
       </div>
       <div style="display:flex;gap:6px;margin-top:9px">
-        <button class="mini" onclick="openLink('${esc(r.maps_link||mapsSearch(r.address))}')"><i class="ti ti-navigation" style="color:var(--navy2)"></i> Open in Maps</button>
+        <button class="mini" onclick="openLink('${jsq(r.maps_link||mapsSearch(r.address))}')"><i class="ti ti-navigation" style="color:var(--navy2)"></i> Open in Maps</button>
         ${admin}
       </div>
     </div>`;
@@ -898,7 +901,7 @@ function showBudget(){
   modalScroll("Full budget",html+'<div class="binfo" style="margin-top:10px">Base estimate. Excludes Fuji-Q rides, meals, shopping.</div>');
 }
 function infoEditBtns(r){
-  return ADMIN?` <button class="mini" style="display:inline-flex;flex:0 0 auto;padding:2px 7px;margin-left:6px" onclick="editInfoRow(${r._row})"><i class="ti ti-edit"></i></button><button class="mini" style="display:inline-flex;flex:0 0 auto;padding:2px 7px;margin-left:4px" onclick="confirmDel('Info',${r._row},'${esc(r.key||r.category)}')"><i class="ti ti-trash" style="color:var(--red)"></i></button>`:"";
+  return ADMIN?` <button class="mini" style="display:inline-flex;flex:0 0 auto;padding:2px 7px;margin-left:6px" onclick="editInfoRow(${r._row})"><i class="ti ti-edit"></i></button><button class="mini" style="display:inline-flex;flex:0 0 auto;padding:2px 7px;margin-left:4px" onclick="confirmDel('Info',${r._row},'${jsq(r.key||r.category)}')"><i class="ti ti-trash" style="color:var(--red)"></i></button>`:"";
 }
 function showInfo(){
   const inf=rows("Info");let html="";
@@ -944,10 +947,10 @@ function fieldsFor(tab){return headers(tab).filter(h=>h&&h!=="_row");}
 function findByRow(tab,rowNum){return rows(tab).find(r=>r._row===rowNum);}
 function findById(tab,id){return rows(tab).find(r=>String(r.id)===String(id));}
 
-function editItin(id){const r=findById("Itinerary",id);openEditForm("Itinerary",r._row,r,"Edit stop");}
-function addItin(){const blank={day:curDay,date:(rows("Itinerary").find(x=>x.day===curDay)||{}).date||""};openEditForm("Itinerary",null,blank,"Add stop");}
-function editPark(row){const r=findByRow("Parking",row);openEditForm("Parking",row,r,"Edit parking");}
-function editStay(row){const r=findByRow("Accommodation",row);openEditForm("Accommodation",row,r,"Edit stay");}
+function editItin(id){const r=findById("Itinerary",id);if(!r){toast("Stop tak jumpa — refresh dulu");return;}openEditForm("Itinerary",r._row,r,"Edit stop");}
+function addItin(){const blank={day:curDay,date:(rows("Itinerary").find(x=>String(x.day)===String(curDay))||{}).date||""};openEditForm("Itinerary",null,blank,"Add stop");}
+function editPark(row){const r=findByRow("Parking",row);if(!r){toast("Row tak jumpa — refresh dulu");return;}openEditForm("Parking",row,r,"Edit parking");}
+function editStay(row){const r=findByRow("Accommodation",row);if(!r){toast("Row tak jumpa — refresh dulu");return;}openEditForm("Accommodation",row,r,"Edit stay");}
 
 function openEditForm(tab,rowNum,data,title){
   const flds=fieldsFor(tab);
@@ -971,7 +974,14 @@ function openEditForm(tab,rowNum,data,title){
 }
 async function saveForm(tab,rowNum){
   const flds=fieldsFor(tab);
-  const values=flds.map(f=>{const el=$("#f_"+f);return el?el.value:"";});
+  // keep numbers as numbers (day/lat/price) or day-tab filtering and maths drift
+  // after an edit; leading-zero strings (phone numbers) stay strings
+  const values=flds.map(f=>{
+    const el=$("#f_"+f);let v=el?el.value:"";
+    const t=String(v).trim();
+    if(t!==""&&/^-?(0|[1-9]\d*)(\.\d+)?$/.test(t))v=Number(t);
+    return v;
+  });
   closeModal();
   if(rowNum==="null"||rowNum===null||rowNum==="undefined"){await addRow(tab,values);}
   else{await updateRow(tab,Number(rowNum),values);}

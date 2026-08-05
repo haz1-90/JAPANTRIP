@@ -45,6 +45,7 @@ function doPost(e) {
     if (action === 'update') {
       // update satu sel/baris: body.row (1-based, ikut sheet), body.values (array)
       if (!body.row || !Array.isArray(body.values)) return json({ ok:false, error:'Data update tak lengkap' });
+      if (Number(body.row) < 2) return json({ ok:false, error:'Row 1 = header, tak boleh update' });
       sh.getRange(body.row, 1, 1, body.values.length).setValues([body.values]);
       log_('update', tab, body.row);
       return json({ ok:true });
@@ -57,6 +58,7 @@ function doPost(e) {
     }
     if (action === 'delete') {
       if (!body.row) return json({ ok:false, error:'Row delete tak dinyatakan' });
+      if (Number(body.row) < 2) return json({ ok:false, error:'Row 1 = header, tak boleh delete' });
       sh.deleteRow(body.row);
       log_('delete', tab, body.row);
       return json({ ok:true });

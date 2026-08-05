@@ -4,7 +4,7 @@
 // The Apps Script API is cross-origin and is NOT intercepted here — the app
 // already keeps its own data copy in localStorage for offline viewing.
 
-const CACHE = 'knm-japan-v1';
+const CACHE = 'knm-japan-v2';
 const SHELL = [
   './',
   './index.html',
@@ -28,15 +28,20 @@ self.addEventListener('activate', (e) => {
 
 self.addEventListener('fetch', (e) => {
   const req = e.request;
-  // Only handle same-origin GET navigations/assets; let everything else pass through.
-  if (req.method !== 'GET' || new URL(req.url).origin !== self.location.origin) return;
+  if (req.method !== 'GET') return;
+  const url = new URL(req.url);
+  const sameOrigin = url.origin === self.location.origin;
+  // Also cache the icon-font CDN so icons render offline (subway, airplane mode).
+  // The data API (script.google.com) and other hosts pass through untouched.
+  const isIconCDN = url.hostname === 'cdnjs.cloudflare.com';
+  if (!sameOrigin && !isIconCDN) return;
 
   e.respondWith(
     caches.open(CACHE).then((cache) =>
       cache.match(req).then((cached) => {
         const network = fetch(req)
           .then((res) => {
-            if (res && res.status === 200) cache.put(req, res.clone());
+            if (res && (res.status === 200 || res.type === 'opaque')) cache.put(req, res.clone());
             return res;
           })
           .catch(() => cached);
