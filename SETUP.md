@@ -110,6 +110,26 @@ sengaja abaikan 小計 (subtotal), お預り (tunai diberi) dan おつり (baki)
 
 ---
 
+## PIN PENGENALAN (setiap orang)
+
+Kolum `pin` dalam tab **Members**. **Pilihan** — kalau kosong, app tak tanya
+apa-apa untuk orang itu.
+
+- **Set kali pertama:** dalam app → More → *Team & my details* → **Set a PIN**.
+  Tak perlu apa-apa kebenaran; sesiapa yang guna nama itu boleh set kali pertama.
+- **Tukar:** butang yang sama, kena tahu PIN semasa.
+- **Buang:** tukar PIN, biarkan medan baru kosong.
+- **LUPA PIN:** kau (admin) kosongkan sel `pin` orang itu dalam Sheet.
+  Lepas tu dia boleh set semula sendiri dalam app.
+
+PIN ini **tidak pernah dihantar ke telefon** — server hanya beritahu app
+"ada PIN" atau "tiada". Jadi tiada siapa boleh baca PIN orang lain.
+
+Ia untuk **pengenalan**, bukan kunci — supaya tiada siapa tersilap pilih nama
+orang lain, dan setiap orang hanya boleh ubah baris Roster sendiri.
+
+---
+
 ## RUJUKAN PANTAS
 
 | Benda | Di mana |
@@ -119,4 +139,5 @@ sengaja abaikan 小計 (subtotal), お預り (tunai diberi) dan おつり (baki)
 | Edit/padam belanja | Admin dalam app, atau edit Sheet terus |
 | Kadar ¥→RM | Auto (mid-market, refresh 6 jam). Sandaran: Sheet → Info → `Exchange rate` bila offline |
 | Trip anjak tarikh | Sheet → Info → `Dates` (format "8-15 November 2026") |
-| PIN | Script Properties: `ADMIN_PIN` (kau), `EXPENSE_PIN` (group) |
+| PIN | `ADMIN_PIN` (kau) & `EXPENSE_PIN` (pilihan) dalam Script Properties · PIN pengenalan dalam tab Members |
+| Reset PIN orang | Kosongkan sel `pin` dalam tab Members — dia set semula sendiri |

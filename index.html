@@ -919,9 +919,49 @@ function showRoster(){
     html+=`</div>`;
   });
   if(!me)html+='<div class="rem-item soft"><i class="ti ti-info-circle"></i><span>Choose your name on the Expenses tab to add your own details.</span></div>';
-  else html+=`<button class="mini" style="width:100%;padding:10px;margin-top:4px" onclick="meSignOut()">Sign out of ${esc(me)}</button>`;
+  else{
+    const mrec=rows("Members").find(r=>String(r.name).trim()===me);
+    const hasPin=!!(mrec&&mrec.pin);
+    html+=`<div style="display:flex;gap:7px;margin-top:4px">
+      <button class="mini" style="padding:10px" onclick="showPinSetup(${hasPin?"true":"false"})"><i class="ti ti-key"></i> ${hasPin?"Change my PIN":"Set a PIN"}</button>
+      <button class="mini" style="padding:10px" onclick="meSignOut()"><i class="ti ti-logout"></i> Sign out</button>
+    </div>`;
+  }
   html+='<div class="binfo" style="margin-top:10px">Everyone can see these. You can only change your own — do not put passport or card numbers here.</div>';
   modalScroll("Team &amp; my details",html);
+}
+function showPinSetup(hasPin){
+  const me=meGet();if(!me){toast("Choose your name first");return;}
+  $("#modalMount2").innerHTML=`<div class="overlay" style="z-index:150" onclick="if(event.target===this)closePin()">
+    <div class="modal" style="max-width:360px">
+      <h3>${hasPin?"Change your PIN":"Set your PIN"}</h3>
+      <p>${hasPin?"Enter your current PIN, then the new one.":"Choose a PIN so nobody can pick your name by mistake. At least 4 characters."}</p>
+      <div class="err hidden" id="spErr"></div>
+      ${hasPin?'<label class="field-label">Current PIN</label><input type="password" inputmode="numeric" id="spCur">':''}
+      <label class="field-label">New PIN${hasPin?' (leave empty to remove)':''}</label>
+      <input type="password" inputmode="numeric" id="spNew" onkeydown="if(event.key==='Enter')savePinSetup(${hasPin?"true":"false"})">
+      <div class="modal-row">
+        <button class="mbtn ghost" onclick="closePin()">Cancel</button>
+        <button class="mbtn primary" onclick="savePinSetup(${hasPin?"true":"false"})">Save</button>
+      </div>
+      ${hasPin?'<div class="binfo" style="margin-top:10px">Forgotten it? Ask the trip admin to clear your PIN in the Members tab, then set a new one here.</div>':''}
+    </div></div>`;
+  setTimeout(()=>{const e=$(hasPin?"#spCur":"#spNew");if(e)e.focus();},80);
+}
+async function savePinSetup(hasPin){
+  const me=meGet();
+  const cur=hasPin?(($("#spCur").value||"").trim()):"";
+  const np=($("#spNew").value||"").trim();
+  if(hasPin&&!cur){return;}
+  if(np&&np.length<4){const e=$("#spErr");if(e){e.classList.remove("hidden");e.textContent="PIN must be at least 4 characters";}return;}
+  const j=await apiPost({action:"setMemberPin",who:me,pin:cur||(ADMIN?ADMIN_PIN:""),newPin:np},cur||(ADMIN?ADMIN_PIN:""));
+  if(j.ok){
+    try{np?localStorage.setItem(MEPIN_KEY,np):localStorage.removeItem(MEPIN_KEY);}catch(e){}
+    closePin();await refresh(false);showRoster();
+    toast(j.cleared?"PIN removed":"PIN saved");
+  }else{
+    const e=$("#spErr");if(e){e.classList.remove("hidden");e.textContent=j.error||"Could not save";}
+  }
 }
 function rosterAdd(item,value){
   const me=meGet();
