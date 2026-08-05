@@ -285,6 +285,49 @@ nav{position:fixed;bottom:0;left:0;right:0;max-width:520px;margin:0 auto;
 
 .greet{font-size:20px;font-weight:800;letter-spacing:-.4px;margin:0 0 10px;}
 
+/* lock screen */
+.lock{position:fixed;inset:0;z-index:500;background:linear-gradient(160deg,var(--brand1),var(--brand2));
+  display:flex;align-items:center;justify-content:center;padding:24px calc(20px + var(--safe-b));
+  overflow-y:auto;}
+.lock-inner{width:100%;max-width:330px;text-align:center;color:#fff;padding:var(--safe-t) 0 0;}
+.lock-logo{width:52px;height:52px;border-radius:15px;margin:0 auto 12px;
+  background:rgba(255,255,255,.16);border:1px solid rgba(255,255,255,.28);
+  display:flex;align-items:center;justify-content:center;font-size:22px;font-weight:800;}
+.lock-title{font-size:19px;font-weight:800;letter-spacing:-.3px;}
+.lock-sub{font-size:13px;opacity:.8;margin-top:4px;min-height:19px;}
+.lock-sub.bad{color:#ffc9c4;opacity:1;font-weight:600;}
+.pindots{display:flex;gap:11px;justify-content:center;margin:20px 0 22px;min-height:15px;}
+.pindots i{width:13px;height:13px;border-radius:50%;background:rgba(255,255,255,.22);
+  border:1px solid rgba(255,255,255,.35);display:block;}
+.pindots i.on{background:#fff;border-color:#fff;}
+.shake{animation:shk .4s;}
+@keyframes shk{0%,100%{transform:translateX(0)}20%{transform:translateX(-9px)}40%{transform:translateX(9px)}60%{transform:translateX(-5px)}80%{transform:translateX(5px)}}
+.keypad{display:grid;grid-template-columns:repeat(3,1fr);gap:11px;}
+.key{height:60px;border-radius:15px;border:1px solid rgba(255,255,255,.2);
+  background:rgba(255,255,255,.13);color:#fff;font-size:23px;font-weight:600;cursor:pointer;
+  transition:transform .1s,background .15s;font-family:inherit;}
+.key:active{transform:scale(.94);background:rgba(255,255,255,.28);}
+.key.alt{font-size:18px;background:rgba(255,255,255,.07);}
+.lock-go{width:100%;margin-top:16px;padding:15px;border:none;border-radius:14px;
+  background:#12b886;color:#fff;font-size:16px;font-weight:700;cursor:pointer;font-family:inherit;
+  transition:opacity .2s,transform .1s;}
+.lock-go:active{transform:scale(.99);}
+.lock-go:disabled{opacity:.35;cursor:default;}
+.lock-note{font-size:12px;opacity:.65;margin-top:14px;line-height:1.5;}
+.lock-note a,.lock-skip{color:#fff;text-decoration:underline;cursor:pointer;}
+
+/* kad ringkas Today */
+.quick2{display:flex;gap:9px;margin-bottom:12px;}
+.qcard{flex:1;background:var(--card);border:1px solid var(--line);border-radius:12px;padding:10px 12px;
+  box-shadow:var(--shadow);cursor:pointer;transition:transform .12s ease;min-width:0;}
+.qcard:active{transform:scale(.98);}
+.qcard .ql{font-size:10px;color:var(--hint);text-transform:uppercase;letter-spacing:.4px;font-weight:700;
+  display:flex;align-items:center;gap:5px;}
+.qcard .qv{font-size:17px;font-weight:800;margin-top:3px;letter-spacing:-.3px;white-space:nowrap;
+  overflow:hidden;text-overflow:ellipsis;}
+.qcard .qs{font-size:10px;color:var(--hint);margin-top:1px;}
+.qcard .qv small{font-size:11px;font-weight:600;color:var(--muted);}
+
 /* dual clock */
 .clocks{display:flex;gap:9px;margin-bottom:12px;}
 .clk{flex:1;background:var(--card);border:1px solid var(--line);border-radius:12px;padding:9px 12px;box-shadow:var(--shadow);}
@@ -380,6 +423,32 @@ nav{position:fixed;bottom:0;left:0;right:0;max-width:520px;margin:0 auto;
   <button class="navbtn" data-s="stay" onclick="go('stay')"><i class="ti ti-bed"></i><div>Stay</div></button>
   <button class="navbtn" data-s="more" onclick="go('more')"><i class="ti ti-dots"></i><div>More</div></button>
 </nav>
+
+<!-- Skrin kunci: penuh skrin, di atas segala-galanya -->
+<div id="lockScreen" class="lock hidden">
+  <div class="lock-inner">
+    <div class="lock-logo">K</div>
+    <div class="lock-title">KNM Japan 2026</div>
+    <div class="lock-sub" id="lockSub">Enter your PIN</div>
+    <div class="pindots" id="pinDots"></div>
+    <div class="keypad">
+      <button class="key" onclick="lockKey('1')">1</button>
+      <button class="key" onclick="lockKey('2')">2</button>
+      <button class="key" onclick="lockKey('3')">3</button>
+      <button class="key" onclick="lockKey('4')">4</button>
+      <button class="key" onclick="lockKey('5')">5</button>
+      <button class="key" onclick="lockKey('6')">6</button>
+      <button class="key" onclick="lockKey('7')">7</button>
+      <button class="key" onclick="lockKey('8')">8</button>
+      <button class="key" onclick="lockKey('9')">9</button>
+      <button class="key alt" onclick="lockClear()">C</button>
+      <button class="key" onclick="lockKey('0')">0</button>
+      <button class="key alt" onclick="lockBack()">⌫</button>
+    </div>
+    <button class="lock-go" id="lockGo" onclick="lockSubmit()" disabled>Enter</button>
+    <div class="lock-note" id="lockNote">Forgotten it? Ask Hazwan to reset your PIN.</div>
+  </div>
+</div>
 
 <div class="toast" id="toast"></div>
 <div id="modalMount"></div>
@@ -511,7 +580,9 @@ const TYPE_ICON={transport:"ti-train",hotel:"ti-bed",sightsee:"ti-camera",food:"
 const TYPE_COLOR={transport:"#185FA5",hotel:"#534AB7",sightsee:"#993C1D",food:"#993C1D",prayer:"#0F6E56"};
 
 // ====== RENDER ALL ======
-function renderAll(){renderToday();renderTrip();renderPark();renderStay();renderMore();if(typeof renderMoney==="function")renderMoney();}
+function renderAll(){renderToday();renderTrip();renderPark();renderStay();renderMore();
+  if(typeof renderMoney==="function")renderMoney();
+  if(typeof fillNextPrayer==="function")fillNextPrayer();}
 
 document.addEventListener("DOMContentLoaded",()=>{
   loadFxCache();
@@ -703,10 +774,21 @@ function renderToday(){
   const jn=jstNow(),mn=mytNow();
   const meNow=meGet();
   const hi=meNow?`<div class="greet">Hi ${esc(meNow)} <span style="font-weight:400">\u{1F44B}</span></div>`
-                :`<div class="greet" style="cursor:pointer" onclick="showWelcome()">Hi there <span style="font-size:12px;color:var(--navy2);font-weight:600">\u00b7 sign in</span></div>`;
+                :`<div class="greet" style="cursor:pointer" onclick="showLock()">Hi there <span style="font-size:12px;color:var(--navy2);font-weight:600">\u00b7 sign in</span></div>`;
   const clocks=`<div class="clocks">
       <div class="clk"><div class="cl">Japan · JST</div><div class="ct">${hhmm(jn)}</div></div>
       <div class="clk"><div class="cl">Malaysia · MYT</div><div class="ct">${hhmm(mn)}</div></div>
+    </div>
+    <div class="quick2">
+      <div class="qcard" onclick="showPrayer()">
+        <div class="ql"><i class="ti ti-building-mosque" style="color:var(--green)"></i> Next prayer</div>
+        <div class="qv" id="qPray">—</div>
+      </div>
+      <div class="qcard" onclick="showCurrency()">
+        <div class="ql"><i class="ti ti-currency-yen" style="color:#7a72d6"></i> ¥1,000 =</div>
+        <div class="qv">${rm2(1000*fxRate())}</div>
+        <div class="qs">¥1 = RM${fxRate()}${fxIsLive()?" · live":""}</div>
+      </div>
     </div>`;
 
   $("#todayBody").innerHTML=`
@@ -735,6 +817,25 @@ function renderToday(){
   `;
 }
 function markDone(id){setStatus("Itinerary",id,"done");}
+// Isi "Next prayer" pada kad Today. Dipanggil selepas render supaya skrin
+// tak tertunggu rangkaian; kalau gagal, kad kekal "—" dan tiada apa rosak.
+async function fillNextPrayer(){
+  const el=$("#qPray");if(!el)return;
+  const it=rows("Itinerary");
+  const cur=it.find(r=>String(r.status).toLowerCase()!=="done")||it[0]||{};
+  if(!cur.lat||!cur.lng){el.textContent="—";return;}
+  try{
+    const t=await timingsFor(cur.lat,cur.lng,jstNow());
+    const now=nowMin();
+    const P=[["Subuh",t.Fajr],["Zohor",t.Dhuhr],["Asar",t.Asr],["Maghrib",t.Maghrib],["Isyak",t.Isha]];
+    let nx=null;
+    for(const p of P){const m=parseTimeToMin(p[1]);if(m!=null&&m>=now){nx=[p[0],p[1],m];break;}}
+    if(!nx){const m=parseTimeToMin(P[0][1]);nx=[P[0][0],P[0][1],m];}   // habis hari → Subuh esok
+    let diff=nx[2]-now; if(diff<0)diff+=1440;
+    el.innerHTML=esc(nx[0])+" "+esc(to12(nx[1]))+" <small>· "+(diff<60?(diff+"m"):fmtDur(diff))+"</small>";
+  }catch(e){el.textContent="—";}
+}
+
 
 // ====== TRANSPORT MODE (per stop; `transport` column overrides, else area default) ======
 const AREA_MODE=[
@@ -1294,43 +1395,78 @@ async function meVerify(n){
 }
 function mePin(){try{return localStorage.getItem(MEPIN_KEY)||"";}catch(e){return "";}}
 function meSignOut(){try{localStorage.removeItem(ME_KEY);localStorage.removeItem(MEPIN_KEY);localStorage.removeItem(WELCOME_KEY);}catch(e){}
-  closeModal();renderAll();showWelcome();toast("Signed out");}
+  closeModal();renderAll();showLock();toast("Signed out");}
 function memberList(){return rows("Members").map(r=>String(r.name||"").trim()).filter(Boolean);}
 
-// ---- Skrin masuk: keluar sekali sahaja setiap telefon ----
-// Sengaja ADA butang langkau: kalau ada orang lupa PIN di stesen kereta api,
-// dia mesti masih boleh tengok itinerary. Ini pengenalan, bukan kunci.
-function maybeWelcome(){
-  if(meGet())return;
-  try{if(localStorage.getItem(WELCOME_KEY))return;}catch(e){}
+// ---- Skrin kunci: PIN sahaja, server yang kenal siapa ----
+// Lambat selepas cubaan gagal supaya PIN 4 angka tak boleh dicuba laju-laju.
+let LOCK_BUF="", LOCK_FAILS=0, LOCK_UNTIL=0;
+function lockNeeded(){
+  if(meGet())return false;
   const names=memberList();
-  if(!names.length)return;                 // data belum sampai
-  if($("#modalMount").innerHTML.trim())return;   // jangan ganggu modal lain
-  showWelcome();
+  if(!names.length)return false;                 // data belum sampai
+  return rows("Members").some(r=>r.pin);         // ada sekurang-kurangnya satu PIN
 }
-function showWelcome(){
-  const names=memberList();
-  $("#modalMount").innerHTML=`<div class="overlay">
-    <div class="modal" style="max-width:380px;text-align:center">
-      <div style="font-size:34px;line-height:1;margin-bottom:6px">👋</div>
-      <h3 style="margin:0 0 4px">Welcome</h3>
-      <p style="margin:0 0 16px">Who's travelling? Tap your name to sign in.</p>
-      <div class="chiprow" style="justify-content:center;margin-bottom:6px">
-        ${names.map(n=>`<button class="daytab" style="padding:10px 18px;font-size:15px" onclick="welcomePick('${jsq(n)}')">${esc(n)}</button>`).join("")}
-      </div>
-      <button class="mini" style="width:100%;padding:10px;margin-top:8px" onclick="welcomeSkip()">Just looking — skip for now</button>
-      <div class="binfo" style="margin-top:10px">You can change this later under More → Team &amp; my details.</div>
-    </div></div>`;
+function maybeWelcome(){ if(lockNeeded())showLock(); }
+function showLock(){
+  LOCK_BUF="";LOCK_FAILS=0;
+  const el=$("#lockScreen");if(!el)return;
+  el.classList.remove("hidden");
+  document.body.style.overflow="hidden";
+  lockDots();lockSay("Enter your PIN");
 }
-function welcomePick(n){
-  const m=rows("Members").find(r=>String(r.name).trim()===n);
-  if(m&&m.pin){askMePin(n);return;}         // ada PIN → sahkan dulu
-  meStore(n);try{localStorage.setItem(WELCOME_KEY,"1");}catch(e){}
-  closeModal();renderAll();toast("Hi "+n+"!");
+function hideLock(){
+  const el=$("#lockScreen");if(el)el.classList.add("hidden");
+  document.body.style.overflow="";
 }
-function welcomeSkip(){
-  try{localStorage.setItem(WELCOME_KEY,"1");}catch(e){}
-  closeModal();
+function lockSay(t,bad){
+  const e=$("#lockSub");if(!e)return;
+  e.textContent=t;e.classList.toggle("bad",!!bad);
+}
+function lockDots(){
+  const e=$("#pinDots");if(!e)return;
+  e.innerHTML=LOCK_BUF.split("").map(()=>'<i class="on"></i>').join("")||'<i></i><i></i><i></i><i></i>';
+  const go=$("#lockGo");if(go)go.disabled=LOCK_BUF.length<4;
+}
+function lockKey(d){
+  if(Date.now()<LOCK_UNTIL)return;
+  if(LOCK_BUF.length>=10)return;
+  LOCK_BUF+=d;lockDots();
+  if($("#lockSub").classList.contains("bad"))lockSay("Enter your PIN");
+}
+function lockBack(){LOCK_BUF=LOCK_BUF.slice(0,-1);lockDots();}
+function lockClear(){LOCK_BUF="";lockDots();lockSay("Enter your PIN");}
+async function lockSubmit(){
+  if(LOCK_BUF.length<4)return;
+  const wait=LOCK_UNTIL-Date.now();
+  if(wait>0){lockSay("Try again in "+Math.ceil(wait/1000)+"s",true);return;}
+  const go=$("#lockGo");if(go)go.disabled=true;
+  lockSay("Checking…");
+  const pin=LOCK_BUF;
+  const j=await apiPost({action:"signIn",pin:pin},pin);
+  if(j.ok){
+    try{localStorage.setItem(MEPIN_KEY,pin);localStorage.setItem(WELCOME_KEY,"1");}catch(e){}
+    if(j.admin){ADMIN=true;ADMIN_PIN=pin;$("#adminBtn").classList.add("on");$("#adminLbl").textContent="Editing";}
+    else meStore(j.name);
+    LOCK_BUF="";lockDots();hideLock();renderAll();toast("Hi "+j.name+"!");
+    return;
+  }
+  LOCK_FAILS++;
+  LOCK_BUF="";lockDots();
+  const box=document.querySelector(".lock-inner");
+  if(box){box.classList.remove("shake");void box.offsetWidth;box.classList.add("shake");}
+  if(LOCK_FAILS>=3){
+    const secs=Math.min(60,10*Math.pow(2,LOCK_FAILS-3));
+    LOCK_UNTIL=Date.now()+secs*1000;
+    lockSay("Too many tries — wait "+secs+"s",true);
+    const t=setInterval(()=>{
+      const left=Math.ceil((LOCK_UNTIL-Date.now())/1000);
+      if(left<=0){clearInterval(t);lockSay("Enter your PIN");}
+      else lockSay("Too many tries — wait "+left+"s",true);
+    },1000);
+  }else{
+    lockSay(j.error||"PIN not recognised",true);
+  }
 }
 function expensesAll(){return rows("Expenses").filter(r=>r.id);}
 function moneyReady(){return !!(DATA.Expenses&&DATA.Expenses.length)&&!!(DATA.Members&&DATA.Members.length);}
