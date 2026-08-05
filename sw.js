@@ -4,10 +4,11 @@
 // The Apps Script API is cross-origin and is NOT intercepted here — the app
 // already keeps its own data copy in localStorage for offline viewing.
 
-const CACHE = 'knm-japan-v2';
+const CACHE = 'knm-japan-v3';
 const SHELL = [
   './',
   './index.html',
+  './fuji.jpg',
   './manifest.webmanifest',
   './icons/icon-192.png',
   './icons/icon-512.png',
