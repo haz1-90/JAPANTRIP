@@ -511,9 +511,11 @@ const TYPE_COLOR={transport:"#185FA5",hotel:"#534AB7",sightsee:"#993C1D",food:"#
 function renderAll(){renderToday();renderTrip();renderPark();renderStay();renderMore();if(typeof renderMoney==="function")renderMoney();}
 
 document.addEventListener("DOMContentLoaded",()=>{
+  loadFxCache();
   const ts=loadCache();
   if(ts){setSync("ok","Saved copy");renderAll();}
   refresh(false);
+  refreshFx(false).then(v=>{if(v)renderAll();});
   // PWA: register service worker for offline app shell
   if("serviceWorker" in navigator){
     window.addEventListener("load",()=>{navigator.serviceWorker.register("sw.js").catch(()=>{});});
@@ -759,19 +761,64 @@ function parkingNear(name,lat,lng){
   return mapsSearch("parking near "+(name||""));
 }
 
-// ====== CURRENCY (YEN <-> MYR, built-in) ======
-let CVT_FX=0.0257; // RM per 1 JPY
-function fxRate(){
+// ====== CURRENCY (YEN <-> MYR) ======
+// Kadar hidup diambil dari open.er-api.com (mid-market, sama asas dengan Wise —
+// Wise tiada API awam percuma). Kalau gagal/offline, guna kadar dari tab Info.
+// PENTING: kadar hidup hanya untuk belanja BARU. Baris lama kekal guna
+// rate_to_rm yang disimpan masa ia direkod, supaya hutang tak berubah sendiri.
+const FX_KEY="knm_fx_v1", FX_FRESH_MS=6*3600e3, FX_MAX_MS=7*24*3600e3;
+let LIVE_FX=null, LIVE_FX_TS=0, CVT_FX=0.0257;
+function loadFxCache(){
+  try{const c=JSON.parse(localStorage.getItem(FX_KEY));
+    if(c&&c.r>0&&(Date.now()-c.ts)<FX_MAX_MS){LIVE_FX=c.r;LIVE_FX_TS=c.ts;}}catch(e){}
+}
+async function refreshFx(force){
+  if(!force&&LIVE_FX&&(Date.now()-LIVE_FX_TS)<FX_FRESH_MS)return LIVE_FX;
+  try{
+    const r=await fetch("https://open.er-api.com/v6/latest/JPY",{cache:"no-store"});
+    const j=await r.json();
+    const v=j&&j.rates&&Number(j.rates.MYR);
+    if(v>0&&v<1){ // semakan waras: ¥1 mesti jauh kurang dari RM1
+      LIVE_FX=v;LIVE_FX_TS=Date.now();
+      try{localStorage.setItem(FX_KEY,JSON.stringify({r:v,ts:LIVE_FX_TS}));}catch(e){}
+    }
+  }catch(e){}
+  return LIVE_FX;
+}
+function sheetRate(){
   const inf=rows("Info").find(r=>/exchange|rate|tukar/i.test(String(r.key)));
   if(inf){const m=String(inf.value).match(/0?\.\d+/);if(m)return parseFloat(m[0]);}
   return 0.0257;
+}
+function fxRate(){return (LIVE_FX>0)?Math.round(LIVE_FX*1e6)/1e6:sheetRate();}
+function fxIsLive(){return LIVE_FX>0;}
+function fxAge(){
+  if(!LIVE_FX_TS)return "";
+  const m=Math.round((Date.now()-LIVE_FX_TS)/60000);
+  if(m<60)return m+" min ago";
+  const h=Math.round(m/60);return h<24?(h+" h ago"):(Math.round(h/24)+" d ago");
+}
+async function fxRefreshNow(){
+  const el=$("#fxLine");if(el)el.innerHTML='<span class="spin"></span> Updating…';
+  await refreshFx(true);
+  CVT_FX=fxRate();
+  const j=$("#cvJPY");if(j&&j.value)cvtJPY();
+  const e2=$("#fxLine");if(e2)e2.innerHTML=fxLine();
+  renderMoney();
+}
+function fxLine(){
+  return fxIsLive()
+    ? `¥1 = RM${fxRate()} · <span style="color:var(--green);font-weight:700">live</span> · updated ${esc(fxAge())}
+       <button class="mini" style="display:inline-flex;flex:0 0 auto;padding:2px 9px;margin-left:6px" onclick="fxRefreshNow()">refresh</button>`
+    : `¥1 = RM${fxRate()} · from the Info tab (no connection yet)
+       <button class="mini" style="display:inline-flex;flex:0 0 auto;padding:2px 9px;margin-left:6px" onclick="fxRefreshNow()">get live rate</button>`;
 }
 function showCurrency(){
   CVT_FX=fxRate();
   $("#modalMount").innerHTML=`<div class="overlay" onclick="if(event.target===this)closeModal()">
     <div class="modal">
       <h3>Currency converter</h3>
-      <p>Rate: ¥1 = RM${CVT_FX} · editable in the Info tab under “Exchange rate”</p>
+      <p id="fxLine">${fxLine()}</p>
       <label class="field-label">Japanese yen (¥)</label>
       <input id="cvJPY" inputmode="decimal" oninput="cvtJPY()" placeholder="0">
       <label class="field-label">Malaysian ringgit (RM)</label>
@@ -779,6 +826,7 @@ function showCurrency(){
       <div style="display:flex;gap:7px;margin:2px 0 12px;flex-wrap:wrap">
         ${[1000,3000,5000,10000].map(v=>`<button class="daytab" onclick="cvtSet(${v})">¥${v.toLocaleString()}</button>`).join("")}
       </div>
+      <div class="link-row" style="margin-bottom:10px" onclick="openLink('https://wise.com/gb/currency-converter/jpy-to-myr-rate')"><i class="ti ti-external-link" style="color:#0F6E56"></i><span>Compare on Wise</span><i class="ti ti-chevron-right" style="color:var(--hint)"></i></div>
       <div class="modal-row"><button class="mbtn ghost" onclick="closeModal()">Close</button></div>
     </div></div>`;
 }
@@ -1328,7 +1376,7 @@ function renderMoney(){
     });
     listHtml+='</div>';
   }
-  el.innerHTML=`<div class="eyebrow">Expenses · rate ¥1 = RM${fxRate()}</div>
+  el.innerHTML=`<div class="eyebrow">Expenses · ¥1 = RM${fxRate()}${fxIsLive()?" · live":""}</div>
     ${meHtml}${stats}
     <button class="bigbtn" style="background:var(--brand1)" onclick="openExpenseForm()"><i class="ti ti-plus"></i>Add expense</button>
     ${settleHtml}${balHtml}
@@ -1521,7 +1569,9 @@ function expRecalc(){
   const amt=parseFloat($("#efAmt")&&$("#efAmt").value)||0;
   const rate=EF.cur==="JPY"?fxRate():1;
   const conv=$("#efConv");
-  if(conv)conv.textContent=EF.cur==="JPY"?("≈ "+rm2(amt*rate)+" (rate ¥1 = RM"+rate+")"):"";
+  if(conv)conv.innerHTML=EF.cur==="JPY"
+    ?("≈ "+rm2(amt*rate)+" · ¥1 = RM"+rate+(fxIsLive()?' <span style="color:var(--green);font-weight:700">live</span>':' <span style="color:var(--hint)">(Info tab)</span>'))
+    :"";
   if(EF.split==="custom"){
     let sum=0;document.querySelectorAll(".efamt").forEach(i=>{
       const chk=i.closest(".memchk").querySelector("input[type=checkbox]");

@@ -114,6 +114,6 @@ sengaja abaikan 小計 (subtotal), お預り (tunai diberi) dan おつり (baki)
 | Tukar itinerary/masa/tempat/budget | Edit Sheet terus, atau app (Admin PIN) |
 | Tambah belanja | App → Expenses (EXPENSE_PIN — semua orang boleh) |
 | Edit/padam belanja | Admin dalam app, atau edit Sheet terus |
-| Tukar kadar ¥→RM | Sheet → Info → `Exchange rate` |
+| Kadar ¥→RM | Auto (mid-market, refresh 6 jam). Sandaran: Sheet → Info → `Exchange rate` bila offline |
 | Trip anjak tarikh | Sheet → Info → `Dates` (format "8-15 November 2026") |
 | PIN | Script Properties: `ADMIN_PIN` (kau), `EXPENSE_PIN` (group) |
