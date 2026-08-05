@@ -5,47 +5,32 @@ Ikut atas ke bawah. Semua sekali ~15 minit. Lepas siap, app terus jalan penuh
 
 ---
 
-## BAHAGIAN A — Google Sheet (5 minit)
+## BAHAGIAN A — Apps Script + auto-buat tab (7 minit)
 
-Buka Sheet **JAPAN NOV 2026** (yang sedia ada — 7 tab lama JANGAN usik).
-
-### A1. Tambah tab `Members`
-1. Tekan **+** kat bawah kiri Sheet (Add sheet).
-2. Rename tab jadi `Members` (klik kanan → Rename). Ejaan & huruf besar mesti tepat.
-3. Baris 1, taip 3 header ni (satu per sel):
-   ```
-   name | qr_link | note
-   ```
-4. Baris 2–6: isi nama 5 orang, satu nama satu baris (contoh: `Hazwan`, `Ali`, ...).
-   Nama ni yang akan keluar dalam app — guna nama panggilan pendek, konsisten.
-5. `qr_link` biar kosong dulu (Bahagian D nanti). `note` bebas.
-
-### A2. Tambah tab `Expenses`
-1. Add sheet lagi satu → rename `Expenses`.
-2. Baris 1, taip 14 header ni ikut turutan:
-   ```
-   id | date | day | title | category | amount | currency | rate_to_rm | amount_rm | paid_by | split_type | split_with | notes | receipt_link
-   ```
-3. **Jangan isi apa-apa lagi** — app yang akan tulis ke sini.
-
-> ⚠️ Peraturan emas: nama tab & nama header mesti TEPAT (huruf besar/kecil sekali).
-> App kenal kolum ikut nama header.
-
----
-
-## BAHAGIAN B — Apps Script (5 minit)
+Sheet **JAPAN NOV 2026** yang sedia ada (7 tab lama JANGAN usik). Tab baru
+`Members` & `Expenses` akan dibuat **automatik** — tak payah taip header manual.
 
 1. Dalam Sheet → menu **Extensions → Apps Script** (project sedia ada akan terbuka).
 2. Buka fail `Code.gs` dalam repo GitHub → **copy SEMUA** isi dia:
    `https://github.com/haz1-90/JAPANTRIP` → fail `Code.gs`
 3. Dalam Apps Script editor: **padam semua** kod lama → **paste** yang baru → 💾 Save.
-4. Kiri, tekan ⚙️ **Project Settings** → scroll ke **Script Properties**:
+4. **Auto-buat tab:** kat bar atas editor ada dropdown fungsi (biasanya tertulis
+   `doGet`). Tukar ke **`setupTabs`** → tekan **▶ Run**.
+   - Kali pertama Google akan minta kebenaran: **Review permissions** →
+     pilih akaun kau → *Advanced* → *Go to ... (unsafe)* → **Allow**.
+     (Ini skrip kau sendiri, jadi selamat.)
+   - Siap → mesej keluar: `✅ Tab "Members" dibuat...` `✅ Tab "Expenses" dibuat...`
+   - Balik ke Sheet — 2 tab baru dah ada dengan header lengkap & bold.
+5. Dalam tab **Members**, isi nama 5 orang kat kolum A (baris 2–6).
+   Guna nama panggilan pendek — nama ni yang keluar dalam app.
+   Kolum `qr_link` & `note` biar kosong dulu (Bahagian D).
+6. Kiri, tekan ⚙️ **Project Settings** → scroll ke **Script Properties**:
    - Pastikan `ADMIN_PIN` masih ada (PIN penuh kau — jangan kongsi).
    - Tekan **Add script property** → Name: `EXPENSE_PIN` → Value: PIN baru
      (contoh 6 digit, MESTI lain dari ADMIN_PIN) → Save.
    - PIN ni nanti kongsi dengan 4 orang lain ikut WhatsApp — dia hanya boleh
      **tambah belanja**, tak boleh ubah itinerary.
-5. Deploy semula — **PENTING, ikut cara ini supaya URL tak berubah**:
+7. Deploy semula — **PENTING, ikut cara ini supaya URL tak berubah**:
    - **Deploy → Manage deployments**
    - Tekan ✏️ (Edit) kat deployment sedia ada
    - **Version: New version** → **Deploy**
@@ -54,7 +39,7 @@ Buka Sheet **JAPAN NOV 2026** (yang sedia ada — 7 tab lama JANGAN usik).
 
 ---
 
-## BAHAGIAN C — Test (3 minit)
+## BAHAGIAN B — Test (3 minit)
 
 1. Buka app: `https://haz1-90.github.io/JAPANTRIP/` → tekan **Refresh** (atas kanan).
 2. Tab **Duit** (bawah, tengah) → kad "Setup diperlukan" patut DAH HILANG,
@@ -72,7 +57,7 @@ dan deploy guna Manage deployments → Edit (bukan New deployment).
 
 ---
 
-## BAHAGIAN D — QR & Resit (bila-bila, sebelum trip)
+## BAHAGIAN C — QR & Resit (bila-bila, sebelum trip)
 
 ### QR DuitNow setiap member
 1. Setiap orang buka app bank sendiri → DuitNow QR → screenshot.

@@ -13,6 +13,48 @@
 const SS = SpreadsheetApp.getActiveSpreadsheet();
 const TABS = ['Itinerary','Accommodation','Places','Parking','Reminders','Info','Budget','Members','Expenses'];
 
+// ---- SETUP SEKALI: buat tab Members & Expenses dengan header betul ----
+// Cara guna: pilih fungsi `setupTabs` kat atas editor > tekan Run.
+// Selamat diulang — kalau tab dah ada, dia takkan padam apa-apa.
+function setupTabs() {
+  var plan = {
+    'Members':  ['name','qr_link','note'],
+    'Expenses': ['id','date','day','title','category','amount','currency','rate_to_rm',
+                 'amount_rm','paid_by','split_type','split_with','notes','receipt_link']
+  };
+  var msg = [];
+  Object.keys(plan).forEach(function(name){
+    var head = plan[name];
+    var sh = SS.getSheetByName(name);
+    if (!sh) {
+      sh = SS.insertSheet(name);
+      sh.getRange(1,1,1,head.length).setValues([head]);
+      sh.getRange(1,1,1,head.length).setFontWeight('bold');
+      sh.setFrozenRows(1);
+      msg.push('✅ Tab "'+name+'" dibuat + header siap');
+    } else {
+      var cur = sh.getLastColumn() ? sh.getRange(1,1,1,sh.getLastColumn()).getValues()[0] : [];
+      var miss = head.filter(function(h){ return cur.indexOf(h) === -1; });
+      if (cur.join('') === '') {
+        sh.getRange(1,1,1,head.length).setValues([head]);
+        sh.getRange(1,1,1,head.length).setFontWeight('bold');
+        sh.setFrozenRows(1);
+        msg.push('✅ Tab "'+name+'" dah ada (kosong) — header diisi');
+      } else if (miss.length) {
+        // tambah kolum yang kurang di hujung, data sedia ada tak diusik
+        sh.getRange(1, cur.length+1, 1, miss.length).setValues([miss]);
+        msg.push('✅ Tab "'+name+'" — tambah kolum: '+miss.join(', '));
+      } else {
+        msg.push('👍 Tab "'+name+'" dah betul, tiada perubahan');
+      }
+    }
+  });
+  var out = msg.join('\n');
+  Logger.log(out);
+  try { SpreadsheetApp.getUi().alert('Setup KNM', out, SpreadsheetApp.getUi().ButtonSet.OK); } catch(e){}
+  return out;
+}
+
 // ---- READ: bebas, tiada password (view mode) ----
 function doGet(e) {
   try {
