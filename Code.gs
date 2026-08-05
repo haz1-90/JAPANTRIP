@@ -16,6 +16,10 @@ const TABS = ['Itinerary','Accommodation','Places','Parking','Reminders','Info',
 // ---- SETUP SEKALI: buat tab Members & Expenses dengan header betul ----
 // Cara guna: pilih fungsi `setupTabs` kat atas editor > tekan Run.
 // Selamat diulang — kalau tab dah ada, dia takkan padam apa-apa.
+// NOTA: JANGAN guna SpreadsheetApp.getUi() di sini. Bila Run dari editor,
+// dialog UI menunggu klik dalam tab Spreadsheet — kalau tak diklik, skrip
+// tergantung sampai timeout 6 minit dan perubahan tak sempat disimpan.
+// Guna Logger.log sahaja; hasil dibaca di Execution log.
 function setupTabs() {
   var plan = {
     'Members':  ['name','qr_link','note'],
@@ -49,9 +53,9 @@ function setupTabs() {
       }
     }
   });
+  SpreadsheetApp.flush();          // pastikan perubahan betul-betul ditulis
   var out = msg.join('\n');
   Logger.log(out);
-  try { SpreadsheetApp.getUi().alert('Setup KNM', out, SpreadsheetApp.getUi().ButtonSet.OK); } catch(e){}
   return out;
 }
 
