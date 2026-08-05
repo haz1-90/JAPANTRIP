@@ -406,7 +406,12 @@ nav{position:fixed;bottom:0;left:0;right:0;max-width:520px;margin:0 auto;
   *{animation-duration:.001ms!important;animation-iteration-count:1!important;transition-duration:.001ms!important;}
 }
 </style>
-<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/tabler-icons/2.47.0/tabler-icons.min.css">
+<!-- Ikon dimuat tanpa menyekat: kalau CDN perlahan, app tetap bermula serta-merta
+     dan ikon muncul kemudian. Dulu ini menahan skrin kunci daripada terpapar. -->
+<link rel="preconnect" href="https://cdnjs.cloudflare.com" crossorigin>
+<link rel="stylesheet" media="print" onload="this.media='all';this.onload=null"
+      href="https://cdnjs.cloudflare.com/ajax/libs/tabler-icons/2.47.0/tabler-icons.min.css">
+<noscript><link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/tabler-icons/2.47.0/tabler-icons.min.css"></noscript>
 </head>
 <body>
 
@@ -555,6 +560,17 @@ nav{position:fixed;bottom:0;left:0;right:0;max-width:520px;margin:0 auto;
   </div>
 </div>
 
+<script>
+// Papar skrin kunci SERTA-MERTA semasa HTML dihurai — tidak menunggu
+// DOMContentLoaded, CSS luar, atau data. Gaya .lock sudah sedia dalam <head>.
+try{
+  if(!localStorage.getItem("knm_me")){
+    var _ls=document.getElementById("lockScreen");
+    if(_ls){_ls.classList.remove("hidden");document.body.style.overflow="hidden";}
+  }
+}catch(e){}
+</script>
+
 <div class="toast" id="toast"></div>
 <div id="modalMount"></div>
 <!-- second layer: PIN prompts that must not destroy the form underneath -->
@@ -596,7 +612,7 @@ async function refresh(manual){
   try{
     const r=await fetch(API_URL,{method:"GET"});
     const j=await r.json();
-    if(j.ok){DATA=j.data;CFG=j.cfg||{};saveCache();setSync("ok","Synced "+timeNow());renderAll();maybeWelcome();if(manual)toast("Up to date");}
+    if(j.ok){DATA=j.data;CFG=j.cfg||{};saveCache();setSync("ok","Synced "+timeNow());renderAll();lockReconcile();if(manual)toast("Up to date");}
     else{setSync("off","Sync failed");if(manual)toast("Sync failed");}
   }catch(e){
     setSync("off","Offline — showing saved");
@@ -646,13 +662,19 @@ async function submitPin(){
 function closeModal(){$("#modalMount").innerHTML="";}
 
 // ====== WRITE (via Apps Script) ======
-async function apiPost(payload,pinOverride){
+async function apiPost(payload,pinOverride,timeoutMs){
   try{
     payload.pin=pinOverride||ADMIN_PIN;
-    const r=await fetch(API_URL,{method:"POST",body:JSON.stringify(payload)});
+    // Apps Script boleh ambil masa; had masa supaya app tak tergantung senyap.
+    const ac=("AbortController" in window)?new AbortController():null;
+    const t=ac?setTimeout(()=>ac.abort(),timeoutMs||20000):null;
+    const r=await fetch(API_URL,{method:"POST",body:JSON.stringify(payload),signal:ac?ac.signal:undefined});
+    if(t)clearTimeout(t);
     return await r.json();
   }catch(e){
-    return {ok:false,error:"Offline — the change was not sent. Please try again when connected."};
+    const aborted=e&&e.name==="AbortError";
+    return {ok:false,error:aborted?"Took too long — check your connection and try again."
+                                  :"Offline — the change was not sent. Please try again when connected."};
   }
 }
 async function setStatus(tab,id,status){
@@ -691,8 +713,9 @@ function renderAll(){renderToday();renderTrip();renderPark();renderStay();render
 
 document.addEventListener("DOMContentLoaded",()=>{
   loadFxCache();
+  maybeWelcome();                    // serta-merta — tiada tunggu rangkaian
   const ts=loadCache();
-  if(ts){setSync("ok","Saved copy");renderAll();maybeWelcome();}
+  if(ts){setSync("ok","Saved copy");renderAll();lockReconcile();}
   refresh(false);
   refreshFx(false).then(v=>{if(v)renderAll();});
   // PWA: register service worker for offline app shell
@@ -1116,7 +1139,10 @@ function showRoster(){
     html+=`<div class="card" style="margin-bottom:10px${mine?";border-color:var(--navy2)":""}">
       <div style="display:flex;align-items:center;justify-content:space-between;gap:8px">
         <div style="font-size:14px;font-weight:700">${esc(n)}${mine?' <span style="color:var(--navy2);font-size:11px">· me</span>':''}</div>
+        <span style="display:flex;gap:6px">
+        ${ADMIN&&!mine?`<button class="mini" style="flex:0 0 auto;padding:5px 10px" onclick="adminSetPin('${jsq(n)}')"><i class="ti ti-key"></i> PIN</button>`:""}
         ${mine?`<button class="mini" style="flex:0 0 auto;padding:5px 11px" onclick="rosterAdd()"><i class="ti ti-plus"></i> add</button>`:""}
+        </span>
       </div>`;
     if(!items.length){
       html+=`<div class="binfo" style="margin-top:6px">${mine?"Nothing yet — add your seat, room, or what you are carrying.":"Nothing added yet."}</div>`;
@@ -1174,6 +1200,31 @@ async function savePinSetup(hasPin){
   }else{
     const e=$("#spErr");if(e){e.classList.remove("hidden");e.textContent=j.error||"Could not save";}
   }
+}
+// Admin boleh set atau kosongkan PIN sesiapa — untuk kes lupa PIN masa trip.
+function adminSetPin(name){
+  if(!ADMIN){toast("Admin only");return;}
+  $("#modalMount2").innerHTML=`<div class="overlay" style="z-index:150" onclick="if(event.target===this)closePin()">
+    <div class="modal" style="max-width:360px">
+      <h3>PIN for ${esc(name)}</h3>
+      <p>Set a new PIN, or leave empty to clear it so they can choose their own.</p>
+      <div class="err hidden" id="apErr"></div>
+      <label class="field-label">New PIN (4+ digits, or empty to clear)</label>
+      <input type="text" inputmode="numeric" id="apNew" onkeydown="if(event.key==='Enter')adminSavePin('${jsq(name)}')">
+      <div class="modal-row">
+        <button class="mbtn ghost" onclick="closePin()">Cancel</button>
+        <button class="mbtn primary" onclick="adminSavePin('${jsq(name)}')">Save</button>
+      </div>
+      <div class="binfo" style="margin-top:10px">PINs must be different for each person — the app signs people in by PIN alone.</div>
+    </div></div>`;
+  setTimeout(()=>$("#apNew")&&$("#apNew").focus(),80);
+}
+async function adminSavePin(name){
+  const np=($("#apNew").value||"").trim();
+  if(np&&np.length<4){const e=$("#apErr");if(e){e.classList.remove("hidden");e.textContent="PIN must be at least 4 characters";}return;}
+  const j=await apiPost({action:"setMemberPin",who:name,pin:ADMIN_PIN,newPin:np},ADMIN_PIN);
+  if(j.ok){closePin();await refresh(false);showRoster();toast(j.cleared?("PIN cleared for "+name):("PIN set for "+name));}
+  else{const e=$("#apErr");if(e){e.classList.remove("hidden");e.textContent=j.error||"Could not save";}}
 }
 function rosterAdd(item,value){
   const me=meGet();
@@ -1506,13 +1557,18 @@ function memberList(){return rows("Members").map(r=>String(r.name||"").trim()).f
 // ---- Skrin kunci: PIN sahaja, server yang kenal siapa ----
 // Lambat selepas cubaan gagal supaya PIN 4 angka tak boleh dicuba laju-laju.
 let LOCK_BUF="", LOCK_FAILS=0, LOCK_UNTIL=0;
-function lockNeeded(){
-  if(meGet())return false;
-  const names=memberList();
-  if(!names.length)return false;                 // data belum sampai
-  return rows("Members").some(r=>r.pin);         // ada sekurang-kurangnya satu PIN
-}
+// PIN sendiri yang kenal siapa, jadi skrin kunci TIDAK perlu tunggu data.
+// Dulu ia menunggu doGet semua tab siap (2-5s) sebelum muncul — itu punca
+// utama login rasa lambat.
+function lockNeeded(){ return !meGet(); }
 function maybeWelcome(){ if(lockNeeded())showLock(); }
+// Dipanggil selepas data tiba: kalau tiada sesiapa set PIN, tiada apa nak
+// dilog masuk — buka terus supaya tak ada orang tersekat.
+function lockReconcile(){
+  if(meGet())return;
+  const rowsM=rows("Members");
+  if(rowsM.length&&!rowsM.some(r=>r.pin))hideLock();
+}
 function lockOpen(){
   const el=$("#lockScreen");if(!el)return;
   el.classList.add("open");
@@ -1575,7 +1631,10 @@ async function lockSubmit(){
       else lockSay("Too many tries — wait "+left+"s",true);
     },1000);
   }else{
-    lockSay(j.error||"PIN not recognised",true);
+    const err=String(j.error||"PIN not recognised");
+    lockSay(/Action tak dikenali/i.test(err)
+      ? "App not updated on the server — paste the latest Code.gs and redeploy."
+      : err, true);
   }
 }
 function expensesAll(){return rows("Expenses").filter(r=>r.id);}
