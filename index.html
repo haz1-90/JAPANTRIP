@@ -283,6 +283,8 @@ nav{position:fixed;bottom:0;left:0;right:0;max-width:520px;margin:0 auto;
 .adj.fixed{background:var(--greenbg);color:var(--green);}
 .link-row .rv{font-weight:800;color:var(--navy2);font-size:15px;}
 
+.greet{font-size:20px;font-weight:800;letter-spacing:-.4px;margin:0 0 10px;}
+
 /* dual clock */
 .clocks{display:flex;gap:9px;margin-bottom:12px;}
 .clk{flex:1;background:var(--card);border:1px solid var(--line);border-radius:12px;padding:9px 12px;box-shadow:var(--shadow);}
@@ -420,7 +422,7 @@ async function refresh(manual){
   try{
     const r=await fetch(API_URL,{method:"GET"});
     const j=await r.json();
-    if(j.ok){DATA=j.data;CFG=j.cfg||{};saveCache();setSync("ok","Synced "+timeNow());renderAll();if(manual)toast("Up to date");}
+    if(j.ok){DATA=j.data;CFG=j.cfg||{};saveCache();setSync("ok","Synced "+timeNow());renderAll();maybeWelcome();if(manual)toast("Up to date");}
     else{setSync("off","Sync failed");if(manual)toast("Sync failed");}
   }catch(e){
     setSync("off","Offline — showing saved");
@@ -514,7 +516,7 @@ function renderAll(){renderToday();renderTrip();renderPark();renderStay();render
 document.addEventListener("DOMContentLoaded",()=>{
   loadFxCache();
   const ts=loadCache();
-  if(ts){setSync("ok","Saved copy");renderAll();}
+  if(ts){setSync("ok","Saved copy");renderAll();maybeWelcome();}
   refresh(false);
   refreshFx(false).then(v=>{if(v)renderAll();});
   // PWA: register service worker for offline app shell
@@ -699,12 +701,16 @@ function renderToday(){
   const pill=pacePill(next);
 
   const jn=jstNow(),mn=mytNow();
+  const meNow=meGet();
+  const hi=meNow?`<div class="greet">Hi ${esc(meNow)} <span style="font-weight:400">\u{1F44B}</span></div>`
+                :`<div class="greet" style="cursor:pointer" onclick="showWelcome()">Hi there <span style="font-size:12px;color:var(--navy2);font-weight:600">\u00b7 sign in</span></div>`;
   const clocks=`<div class="clocks">
       <div class="clk"><div class="cl">Japan · JST</div><div class="ct">${hhmm(jn)}</div></div>
       <div class="clk"><div class="cl">Malaysia · MYT</div><div class="ct">${hhmm(mn)}</div></div>
     </div>`;
 
   $("#todayBody").innerHTML=`
+    ${hi}
     ${clocks}
     ${paceToggle()}
     <div class="eyebrow">Day ${esc(next.day)} · ${esc(next.date)}</div>
@@ -1251,7 +1257,7 @@ function modalScroll(title,body){
 // second calculation path anywhere (lesson from the Ketravelan "(DB)" label).
 // A settlement is just an expense row: category "Settlement", payer = pengirim,
 // split 100% to penerima — append-only history for free.
-const ME_KEY="knm_me", EXPPIN_KEY="knm_exp_pin", MEPIN_KEY="knm_me_pin";
+const ME_KEY="knm_me", EXPPIN_KEY="knm_exp_pin", MEPIN_KEY="knm_me_pin", WELCOME_KEY="knm_welcomed";
 const CATS=[["Transport","🚆"],["Accommodation","🏨"],["Food","🍜"],["Activities","🎫"],["Shopping","🛍️"],["Other","💠"]];
 const CAT_ICON=Object.fromEntries(CATS);CAT_ICON["Settlement"]="🤝";
 // keep the earlier Malay labels mapped so rows written before the rename still show an icon
@@ -1282,12 +1288,50 @@ function askMePin(n){
 async function meVerify(n){
   const pin=($("#mePinInput").value||"").trim();if(!pin)return;
   const j=await apiPost({action:"whoami",who:n,pin:pin},pin);
-  if(j.ok){try{localStorage.setItem(MEPIN_KEY,pin);}catch(e){}meStore(j.name);closePin();renderAll();toast("Signed in as "+j.name);}
+  if(j.ok){try{localStorage.setItem(MEPIN_KEY,pin);localStorage.setItem(WELCOME_KEY,"1");}catch(e){}
+    meStore(j.name);closePin();closeModal();renderAll();toast("Hi "+j.name+"!");}
   else{const e1=$("#meErr");if(e1){e1.classList.remove("hidden");e1.textContent=j.error||"Name or PIN does not match";}}
 }
 function mePin(){try{return localStorage.getItem(MEPIN_KEY)||"";}catch(e){return "";}}
-function meSignOut(){try{localStorage.removeItem(ME_KEY);localStorage.removeItem(MEPIN_KEY);}catch(e){}renderAll();toast("Signed out");}
+function meSignOut(){try{localStorage.removeItem(ME_KEY);localStorage.removeItem(MEPIN_KEY);localStorage.removeItem(WELCOME_KEY);}catch(e){}
+  closeModal();renderAll();showWelcome();toast("Signed out");}
 function memberList(){return rows("Members").map(r=>String(r.name||"").trim()).filter(Boolean);}
+
+// ---- Skrin masuk: keluar sekali sahaja setiap telefon ----
+// Sengaja ADA butang langkau: kalau ada orang lupa PIN di stesen kereta api,
+// dia mesti masih boleh tengok itinerary. Ini pengenalan, bukan kunci.
+function maybeWelcome(){
+  if(meGet())return;
+  try{if(localStorage.getItem(WELCOME_KEY))return;}catch(e){}
+  const names=memberList();
+  if(!names.length)return;                 // data belum sampai
+  if($("#modalMount").innerHTML.trim())return;   // jangan ganggu modal lain
+  showWelcome();
+}
+function showWelcome(){
+  const names=memberList();
+  $("#modalMount").innerHTML=`<div class="overlay">
+    <div class="modal" style="max-width:380px;text-align:center">
+      <div style="font-size:34px;line-height:1;margin-bottom:6px">👋</div>
+      <h3 style="margin:0 0 4px">Welcome</h3>
+      <p style="margin:0 0 16px">Who's travelling? Tap your name to sign in.</p>
+      <div class="chiprow" style="justify-content:center;margin-bottom:6px">
+        ${names.map(n=>`<button class="daytab" style="padding:10px 18px;font-size:15px" onclick="welcomePick('${jsq(n)}')">${esc(n)}</button>`).join("")}
+      </div>
+      <button class="mini" style="width:100%;padding:10px;margin-top:8px" onclick="welcomeSkip()">Just looking — skip for now</button>
+      <div class="binfo" style="margin-top:10px">You can change this later under More → Team &amp; my details.</div>
+    </div></div>`;
+}
+function welcomePick(n){
+  const m=rows("Members").find(r=>String(r.name).trim()===n);
+  if(m&&m.pin){askMePin(n);return;}         // ada PIN → sahkan dulu
+  meStore(n);try{localStorage.setItem(WELCOME_KEY,"1");}catch(e){}
+  closeModal();renderAll();toast("Hi "+n+"!");
+}
+function welcomeSkip(){
+  try{localStorage.setItem(WELCOME_KEY,"1");}catch(e){}
+  closeModal();
+}
 function expensesAll(){return rows("Expenses").filter(r=>r.id);}
 function moneyReady(){return !!(DATA.Expenses&&DATA.Expenses.length)&&!!(DATA.Members&&DATA.Members.length);}
 function rm2(v){return "RM"+(Math.round(v*100)/100).toLocaleString(undefined,{minimumFractionDigits:2,maximumFractionDigits:2});}
