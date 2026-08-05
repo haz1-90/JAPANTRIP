@@ -319,13 +319,13 @@ nav{position:fixed;bottom:0;left:0;right:0;max-width:520px;margin:0 auto;
 
   <!-- PARK -->
   <section class="screen" id="s-park">
-    <div class="eyebrow">Parking · Noah <span style="color:var(--amber)">· draft, pending rental guideline</span></div>
+    <div class="eyebrow" id="parkEyebrow">Parking · Noah</div>
     <div id="parkBody"></div>
   </section>
 
   <!-- STAY -->
   <section class="screen" id="s-stay">
-    <div class="eyebrow">Accommodation · 6 stays</div>
+    <div class="eyebrow" id="stayEyebrow">Accommodation</div>
     <div id="stayBody"></div>
   </section>
 
@@ -500,9 +500,21 @@ const PACE_KEY="knm_pace_v1";
 function paceMode(){try{return localStorage.getItem(PACE_KEY)||"schedule";}catch(e){return "schedule";}}
 function setPaceMode(m){try{localStorage.setItem(PACE_KEY,m);}catch(e){}renderAll();}
 function nowMin(){const d=new Date();return d.getHours()*60+d.getMinutes();}
+// Trip window is read from Info (key "Dates", e.g. "8-15 November 2026 (7 nights)")
+// so shifting the trip only needs a Sheet edit; falls back to 8-15 Nov 2026.
+function tripWindow(){
+  const inf=rows("Info").find(r=>/^dates?$/i.test(String(r.key).trim()));
+  const m=String((inf&&inf.value)||"").match(/(\d{1,2})\s*[-–]\s*(\d{1,2})\s+([A-Za-z]+)\s+(\d{4})/);
+  if(m){
+    const MON={jan:0,feb:1,mar:2,mac:2,apr:3,may:4,mei:4,jun:5,jul:6,aug:7,ogo:7,sep:8,oct:9,okt:9,nov:10,dec:11,dis:11};
+    const mo=MON[m[3].slice(0,3).toLowerCase()];
+    if(mo!=null)return {d1:+m[1],d2:+m[2],mo:mo,yr:+m[4]};
+  }
+  return {d1:8,d2:15,mo:10,yr:2026};
+}
 function tripActive(){
-  const d=new Date();
-  const inWin=(d.getFullYear()===2026&&d.getMonth()===10&&d.getDate()>=8&&d.getDate()<=15);
+  const d=new Date(),w=tripWindow();
+  const inWin=(d.getFullYear()===w.yr&&d.getMonth()===w.mo&&d.getDate()>=w.d1&&d.getDate()<=w.d2);
   const started=rows("Itinerary").some(r=>String(r.status).toLowerCase()==="done");
   return inWin||started;
 }
@@ -807,6 +819,10 @@ function toggleDone(id,st){setStatus("Itinerary",id,st);}
 // ====== PARK ======
 function renderPark(){
   const pk=rows("Parking");
+  // status note comes from Info (key contains "parking") so the draft label can
+  // be edited or removed from the Sheet without touching code
+  const note=rows("Info").find(r=>/parking/i.test(String(r.key)));
+  $("#parkEyebrow").innerHTML="Parking · Noah"+(note&&note.value?' <span style="color:var(--amber)">· '+esc(note.value)+'</span>':"");
   if(!pk.length){$("#parkBody").innerHTML='<div class="empty">No parking data.</div>';return;}
   // group by checkpoint
   const groups={};pk.forEach(r=>{(groups[r.checkpoint]=groups[r.checkpoint]||[]).push(r);});
@@ -843,6 +859,7 @@ function renderPark(){
 // ====== STAY ======
 function renderStay(){
   const st=rows("Accommodation").filter(r=>r.id&&r.id!=="TOTAL");
+  $("#stayEyebrow").textContent="Accommodation · "+st.length+" stays";
   let html="";
   st.forEach(r=>{
     const admin=ADMIN?`<button class="mini" style="flex:0 0 44px" onclick="editStay(${r._row})"><i class="ti ti-edit"></i></button>`:"";

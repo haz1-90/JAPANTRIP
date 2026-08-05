@@ -145,6 +145,14 @@ Buka Google Sheet, edit macam biasa. App auto-ambil bila refresh.
 
 Dua-dua sync sebab sumber sama (Sheet).
 
+**App ni 100% data-driven** — semua benda ikut Sheet, termasuk:
+- Kiraan "X stays" (auto kira dari tab Accommodation)
+- Nota status Parking (Info: key mengandungi "parking" → keluar sebelah tajuk Park; buang row = hilang)
+- Tarikh trip untuk logik pacing (Info: key `Dates`, format "8-15 November 2026" — kalau trip anjak, edit sini sahaja)
+- Kadar tukaran ¥→RM (Info: key `Exchange rate`)
+
+Kod hanya perlu diubah bila nak tambah *feature*, bukan bila trip berubah.
+
 ---
 
 ## 6b. LIVE PACING (skrin Today)
