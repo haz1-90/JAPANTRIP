@@ -126,6 +126,17 @@ Column ikut Sheet sebenar (KNM_Japan_2026_Master). App map ikut **nama header**,
 - **Check halal & masjid** — link Halal Gourmet Japan, Halal Navi, + Maps (restoran halal / masjid berdekatan).
 - **Kecemasan** — Polis 110, Ambulans 119, Kedutaan Malaysia (tel + peta), Hospital berdekatan. Boleh **tambah/edit/buang** kontak (embassy/takaful/hospital) — Admin je. Kontak tambahan disimpan dalam tab **Info** (category `Emergency`).
 
+### Modul Duit (belanja, split, settle, QR)
+
+Tab **Duit** kat bottom nav. Setup sekali:
+1. Tambah 2 tab dalam Sheet, header baris 1 **tepat**:
+   - `Members`: `name | qr_link | note` — isi nama 5 orang. `qr_link` = link gambar screenshot DuitNow QR masing-masing (Drive/imgur, pastikan link public).
+   - `Expenses`: `id | date | day | title | category | amount | currency | rate_to_rm | amount_rm | paid_by | split_type | split_with | notes` — biar kosong, app yang isi.
+2. Paste `Code.gs` terbaru → Apps Script → Deploy (Manage deployments → Edit → New version — URL kekal).
+3. (Recommended) Script Properties → tambah `EXPENSE_PIN` = PIN kedua untuk group. Scope dia **tambah belanja sahaja** — tak boleh edit/delete itinerary. Kongsi PIN ni dengan 4 orang lain; ADMIN_PIN kekal rahsia Hazwan.
+
+Cara guna: buka Duit → pilih "Saya siapa" (sekali) → **Tambah belanja** (default ¥, hari semasa trip, split sama rata semua; custom split ada guard "belum diagih"). Kadar ¥→RM diambil dari Info masa entry dan **disimpan** dalam row (nilai settlement tak berubah bila kadar bergerak). **Settle up** kira baki bersih (net offset) + cadangan transfer paling sedikit; tekan 🔲 QR untuk tunjuk QR penerima + jumlah, tekan ✓ lepas transfer — rekod settlement kekal dalam sejarah (append-only). Duit **tidak** lalu app — bayar terus DuitNow/tunai.
+
 ### Mode pengangkutan (drive / train / taxi)
 Butang "Direction" bukak Google Maps ikut mod:
 - **train** → mod transit, **drive/taxi** → mod driving, **walk** → walking.

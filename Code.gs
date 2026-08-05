@@ -1,14 +1,17 @@
 // ===== KNM JAPAN 2026 — Apps Script Backend =====
-// Password TAK hardcode. Disimpan dalam Script Properties (key: ADMIN_PIN).
-// Set dulu: Project Settings > Script Properties > Add > ADMIN_PIN = <your pin>
+// Password TAK hardcode. Disimpan dalam Script Properties:
+//   ADMIN_PIN   = PIN penuh (Hazwan) — semua action
+//   EXPENSE_PIN = PIN kongsi group (optional) — HANYA boleh tambah row
+//                 dalam tab Expenses. Tak boleh edit/delete/usik tab lain.
+// Set: Project Settings > Script Properties > Add.
 //
-// DEPLOY: Deploy > New deployment > Web app
+// DEPLOY: Deploy > Manage deployments > Edit > Version: New version
 //   - Execute as: Me
 //   - Who has access: Anyone   (WAJIB — supaya app boleh fetch tanpa login)
-// Kalau redeploy & URL berubah, update API_URL dalam index.html.
+// Guna "Manage deployments > Edit" supaya URL TIDAK berubah.
 
 const SS = SpreadsheetApp.getActiveSpreadsheet();
-const TABS = ['Itinerary','Accommodation','Places','Parking','Reminders','Info','Budget'];
+const TABS = ['Itinerary','Accommodation','Places','Parking','Reminders','Info','Budget','Members','Expenses'];
 
 // ---- READ: bebas, tiada password (view mode) ----
 function doGet(e) {
@@ -31,12 +34,20 @@ function doPost(e) {
   try {
     const body = JSON.parse(e.postData.contents);
     // 1) Cek password lawan Script Properties (bukan hardcode)
-    const stored = PropertiesService.getScriptProperties().getProperty('ADMIN_PIN');
+    const props = PropertiesService.getScriptProperties();
+    const stored = props.getProperty('ADMIN_PIN');
     if (!stored) return json({ ok:false, error:'ADMIN_PIN belum di-set dalam Script Properties' });
-    if (String(body.pin) !== String(stored)) return json({ ok:false, error:'PIN salah' });
+    const expPin = props.getProperty('EXPENSE_PIN');
+    const isAdmin = String(body.pin) === String(stored);
+    const isExpense = !isAdmin && expPin && String(body.pin) === String(expPin);
+    if (!isAdmin && !isExpense) return json({ ok:false, error:'PIN salah' });
 
     const action = body.action;
     const tab = body.tab;
+    // EXPENSE_PIN scope: tambah belanja SAHAJA. Bukan edit, bukan delete, bukan tab lain.
+    if (isExpense && !(action === 'add' && tab === 'Expenses')) {
+      return json({ ok:false, error:'PIN ni untuk tambah belanja sahaja' });
+    }
     if (TABS.indexOf(tab) === -1) return json({ ok:false, error:'Tab tak sah' });
     const sh = SS.getSheetByName(tab);
     if (!sh) return json({ ok:false, error:'Tab tak jumpa' });
