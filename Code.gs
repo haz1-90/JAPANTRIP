@@ -90,10 +90,28 @@ function doPost(e) {
 
     const action = body.action;
     const tab = body.tab;
-    // EXPENSE_PIN scope: tambah belanja SAHAJA. Bukan edit, bukan delete, bukan tab lain.
-    if (isExpense && !(action === 'add' && tab === 'Expenses')) {
+    // EXPENSE_PIN scope: tambah belanja + muat naik resit SAHAJA.
+    // Bukan edit, bukan delete, bukan tab lain.
+    const okForExpensePin = (action === 'add' && tab === 'Expenses') || action === 'uploadReceipt';
+    if (isExpense && !okForExpensePin) {
       return json({ ok:false, error:'PIN ni untuk tambah belanja sahaja' });
     }
+
+    // ---- Muat naik gambar resit ke Drive (tiada tab terlibat) ----
+    if (action === 'uploadReceipt') {
+      if (!body.dataUrl) return json({ ok:false, error:'Tiada gambar' });
+      const m = String(body.dataUrl).match(/^data:(image\/[a-z0-9.+-]+);base64,([\s\S]+)$/i);
+      if (!m) return json({ ok:false, error:'Format gambar tak sah' });
+      const bytes = Utilities.base64Decode(m[2]);
+      if (bytes.length > 10 * 1024 * 1024) return json({ ok:false, error:'Gambar terlalu besar (max 10MB)' });
+      const safe = String(body.name || 'receipt').replace(/[^A-Za-z0-9._-]/g, '_').slice(0, 60);
+      const blob = Utilities.newBlob(bytes, m[1], safe + '.jpg');
+      const file = receiptFolder_().createFile(blob);
+      file.setSharing(DriveApp.Access.ANYONE_WITH_LINK, DriveApp.Permission.VIEW);
+      log_('uploadReceipt', 'Drive', file.getId());
+      return json({ ok:true, url: 'https://drive.google.com/file/d/' + file.getId() + '/view', id: file.getId() });
+    }
+
     if (TABS.indexOf(tab) === -1) return json({ ok:false, error:'Tab tak sah' });
     const sh = SS.getSheetByName(tab);
     if (!sh) return json({ ok:false, error:'Tab tak jumpa' });
@@ -141,6 +159,13 @@ function doPost(e) {
   } catch (err) {
     return json({ ok:false, error: String(err) });
   }
+}
+
+// ---- Folder Drive untuk resit (dibuat sekali, guna semula) ----
+function receiptFolder_() {
+  var name = 'KNM Japan 2026 — Resit';
+  var it = DriveApp.getFoldersByName(name);
+  return it.hasNext() ? it.next() : DriveApp.createFolder(name);
 }
 
 // ---- Logging ringkas (Semakan #5 ship-safe) ----

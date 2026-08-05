@@ -70,14 +70,20 @@ dan deploy guna Manage deployments → Edit (bukan New deployment).
 > Tapi sesiapa yang ada URL app boleh nampak — kalau ada member tak selesa,
 > biar kosong; settle guna no. akaun dalam `note`.
 
-### Resit belanja (masa trip)
-1. Snap gambar resit → upload ke Drive (atau guna link Google Photos).
-2. Masa tambah belanja, paste link kat ruang **"Receipt (optional)"** —
-   atau tambah kemudian dalam Sheet, kolum `receipt_link`.
-3. Dalam senarai belanja, item yang ada resit akan tunjuk butang 🧾 — tekan untuk buka.
+### Resit belanja (masa trip) — terus dari telefon
+1. Masa tambah belanja, tekan **"Take photo or choose image"**.
+2. Pilih **Camera** (snap terus) atau **Photo Library** (gambar sedia ada).
+3. Gambar auto-dikecilkan (maks 1600px) supaya laju walaupun wifi hotel perlahan.
+4. Tekan **Save** — gambar dimuat naik dulu, lepas tu baris belanja ditulis.
+   Satu prompt PIN sahaja untuk kedua-duanya.
+5. Dalam senarai belanja, item yang ada resit tunjuk butang 🧾 — tekan untuk buka.
 
-> Tip masa trip: buat satu folder Drive "Resit Japan" yang di-share pada semua,
-> upload semua resit ke situ — senang cari balik.
+Gambar disimpan dalam Google Drive **kau** sendiri, dalam folder yang dibuat
+automatik: **"KNM Japan 2026 — Resit"**. Fail di-set *anyone with the link can
+view* supaya boleh dibuka dari app.
+
+> Masih boleh paste link manual dalam ruang bawah butang tu kalau gambar dah
+> ada kat Drive/Photos.
 
 ---
 

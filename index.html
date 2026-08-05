@@ -1129,11 +1129,11 @@ function renderMoney(){
 }
 
 // ---- add expense form ----
-let EF={cur:"JPY",cat:"Makan",day:null,split:"equal"};
+let EF={cur:"JPY",cat:"Food",day:null,split:"equal",imgData:null};
 function openExpenseForm(){
   const names=memberList(),me=meGet();
   const dnow=tripDayNow();
-  EF={cur:"JPY",cat:"Makan",day:dnow||1,split:"equal",payer:me||names[0]};
+  EF={cur:"JPY",cat:"Food",day:dnow||1,split:"equal",payer:me||names[0],imgData:null};
   const it=rows("Itinerary");
   const days=[...new Set(it.map(r=>String(r.day)))].filter(d=>d&&d!=="null");
   const dayChips=days.map(d=>`<button class="daytab efday ${String(EF.day)===d?'on':''}" data-d="${esc(d)}" onclick="efSetDay('${jsq(d)}')">D${esc(d)}</button>`).join("");
@@ -1173,8 +1173,14 @@ function openExpenseForm(){
         <div class="unalloc hidden" id="efUnalloc"></div>
         <label class="field-label">Notes (optional)</label>
         <input id="efNotes">
-        <label class="field-label">Receipt (optional) — image link (Drive or Photos)</label>
-        <input id="efReceipt" placeholder="https://...">
+        <label class="field-label">Receipt (optional)</label>
+        <button type="button" class="mini" style="width:100%;padding:12px;margin-bottom:6px"
+                onclick="document.getElementById('efFile').click()">
+          <i class="ti ti-camera"></i> Take photo or choose image
+        </button>
+        <input type="file" id="efFile" accept="image/*" class="hidden" onchange="onReceiptPick(this)">
+        <div class="binfo" id="efRcptState" style="margin-bottom:8px"></div>
+        <input id="efReceipt" placeholder="or paste an image link">
       </div>
       <div class="modal-row">
         <button class="mbtn ghost" onclick="closeModal()">Cancel</button>
@@ -1182,6 +1188,45 @@ function openExpenseForm(){
       </div>
     </div></div>`;
   expRecalc();
+}
+// Shrink a camera photo before upload: phone originals are 3-5 MB, which is
+// slow on hotel wifi and pointless for a receipt. ~1600px / q0.8 stays legible.
+function compressImage(file,maxDim,quality){
+  return new Promise(function(res,rej){
+    const fr=new FileReader(),img=new Image();
+    fr.onerror=rej;img.onerror=function(){rej(new Error("bad image"));};
+    fr.onload=function(e){img.src=e.target.result;};
+    img.onload=function(){
+      let w=img.width,h=img.height;
+      const sc=Math.min(1,maxDim/Math.max(w,h));
+      w=Math.max(1,Math.round(w*sc));h=Math.max(1,Math.round(h*sc));
+      const c=document.createElement("canvas");c.width=w;c.height=h;
+      c.getContext("2d").drawImage(img,0,0,w,h);
+      res(c.toDataURL("image/jpeg",quality));
+    };
+    fr.readAsDataURL(file);
+  });
+}
+async function onReceiptPick(input){
+  const f=input.files&&input.files[0];if(!f)return;
+  const st=$("#efRcptState");
+  if(!/^image\//.test(f.type)){if(st)st.textContent="That file is not an image.";return;}
+  if(st)st.innerHTML='<span class="spin"></span> Preparing image…';
+  try{
+    EF.imgData=await compressImage(f,1600,0.8);
+    const kb=Math.round(EF.imgData.length*0.75/1024);
+    if(st)st.innerHTML='📎 Receipt attached ('+kb+' KB) · uploads when you save '+
+      '<button type="button" class="mini" style="display:inline-flex;flex:0 0 auto;padding:2px 8px;margin-left:6px" onclick="clearReceipt()">remove</button>';
+  }catch(e){
+    EF.imgData=null;
+    if(st)st.textContent="Could not read that image. You may paste a link instead.";
+  }
+}
+function clearReceipt(){EF.imgData=null;const i=$("#efFile");if(i)i.value="";const st=$("#efRcptState");if(st)st.textContent="";}
+// Drive share links do not work in <img>; convert them to a displayable form.
+function imgUrl(u){
+  const m=String(u||"").match(/drive\.google\.com\/(?:file\/d\/|open\?id=|uc\?id=)([A-Za-z0-9_-]{10,})/);
+  return m?("https://drive.google.com/thumbnail?id="+m[1]+"&sz=w1000"):u;
 }
 function efSetCur(c){EF.cur=c;$("#efCurJ").classList.toggle("on",c==="JPY");$("#efCurR").classList.toggle("on",c==="MYR");expRecalc();}
 function efSetCat(c){EF.cat=c;document.querySelectorAll(".efcat").forEach(b=>b.classList.toggle("on",b.dataset.c===c));}
@@ -1239,10 +1284,23 @@ async function submitExpense(){
     notes:($("#efNotes").value||"").trim(),
     receipt_link:($("#efReceipt")&&$("#efReceipt").value||"").trim()
   };
-  const hdrs=fieldsFor("Expenses");
-  const values=hdrs.map(h=>rec[h]!=null?rec[h]:"");
+  const img=EF.imgData||null;
   closeModal();
-  await expensePost({action:"add",tab:"Expenses",values:values},rec);
+  await expenseFlow(rec,img);
+}
+// Upload the photo (if any) then write the row — both under one PIN prompt.
+async function expenseFlow(rec,imgData){
+  const pin=ADMIN?ADMIN_PIN:expPinStored();
+  if(!pin){askExpPin(rec,imgData);return;}
+  if(imgData){
+    toast("Uploading receipt…");
+    const up=await apiPost({action:"uploadReceipt",dataUrl:imgData,name:rec.id},pin);
+    if(up.ok&&up.url){rec.receipt_link=up.url;}
+    else if(/PIN/i.test(up.error||"")){try{localStorage.removeItem(EXPPIN_KEY);}catch(e){}toast(up.error);askExpPin(rec,imgData);return;}
+    else{toast(up.error||"Receipt upload failed — saving without it");}
+  }
+  const hdrs=fieldsFor("Expenses");
+  await expensePost({action:"add",tab:"Expenses",values:hdrs.map(h=>rec[h]!=null?rec[h]:"")},rec);
 }
 // post with EXPENSE_PIN (or ADMIN); ask once, remember
 function expPinStored(){try{return localStorage.getItem(EXPPIN_KEY)||"";}catch(e){return "";}}
@@ -1258,8 +1316,12 @@ async function expensePost(payload,localRec){
     else toast(j.error||"Could not save");
   }
 }
+// Called two ways: askExpPin(payload, rec) from expensePost, or
+// askExpPin(rec, imgData) from expenseFlow when the photo still needs a PIN.
 function askExpPin(payload,localRec){
-  window._pendingExp={payload:payload,rec:localRec};
+  const retryFlow=(payload&&payload.id&&!payload.action);
+  window._pendingExp=retryFlow?{rec:payload,img:localRec,flow:true}
+                              :{payload:payload,rec:localRec};
   $("#modalMount").innerHTML=`<div class="overlay" onclick="if(event.target===this)closeModal()">
     <div class="modal">
       <h3>Expense PIN</h3>
@@ -1277,7 +1339,9 @@ async function saveExpPin(){
   try{localStorage.setItem(EXPPIN_KEY,pin);}catch(e){}
   closeModal();
   const p=window._pendingExp;window._pendingExp=null;
-  if(p)await expensePost(p.payload,p.rec);
+  if(!p)return;
+  if(p.flow)await expenseFlow(p.rec,p.img);
+  else await expensePost(p.payload,p.rec);
 }
 function markSettled(from,to,amt){
   $("#modalMount").innerHTML=`<div class="overlay" onclick="if(event.target===this)closeModal()">
@@ -1306,7 +1370,7 @@ function showPayQR(name,amt){
     <div class="modal" style="text-align:center">
       <h3>Pay ${esc(name)}</h3>
       <p>Amount: <b style="font-size:18px;color:var(--navy)">${rm2(amt)}</b></p>
-      ${qr?`<img class="qrimg" src="${esc(qr)}" alt="QR ${esc(name)}">`:`<div class="empty">${esc(name)} has not provided a QR code.<br>Add the link in the Members tab (qr_link).</div>`}
+      ${qr?`<img class="qrimg" src="${esc(imgUrl(qr))}" alt="QR ${esc(name)}">`:`<div class="empty">${esc(name)} has not provided a QR code.<br>Add the link in the Members tab (qr_link).</div>`}
       <div class="binfo" style="margin-bottom:10px">Scan with your banking application, enter the amount, and complete the transfer. Afterwards, press ✓ in the settlement list.</div>
       <div class="modal-row"><button class="mbtn ghost" onclick="closeModal()">Close</button></div>
     </div></div>`;
@@ -1316,7 +1380,7 @@ function showQRs(){
   let html="";
   ms.forEach(m=>{
     html+=`<div class="sect-label">${esc(m.name)}</div>`;
-    html+=m.qr_link?`<img class="qrimg" src="${esc(m.qr_link)}" alt="QR ${esc(m.name)}">`
+    html+=m.qr_link?`<img class="qrimg" src="${esc(imgUrl(m.qr_link))}" alt="QR ${esc(m.name)}">`
       :`<div class="binfo">No QR code yet — add a link to the DuitNow QR screenshot in the Members tab under qr_link.</div>`;
   });
   modalScroll("Member payment QR codes",html||'<div class="empty">The Members tab is empty.</div>');
