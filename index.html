@@ -1065,7 +1065,7 @@ function renderMoney(){
       <div class="binfo" style="margin-top:8px">1. Tambah 2 tab dalam Google Sheet dengan header baris 1 <b>tepat</b> macam ni:</div>
       <div class="binfo" style="margin-top:6px;font-family:monospace;font-size:11px;overflow-x:auto">
       <b>Members</b>: name | qr_link | note<br>
-      <b>Expenses</b>: id | date | day | title | category | amount | currency | rate_to_rm | amount_rm | paid_by | split_type | split_with | notes</div>
+      <b>Expenses</b>: id | date | day | title | category | amount | currency | rate_to_rm | amount_rm | paid_by | split_type | split_with | notes | receipt_link</div>
       <div class="binfo" style="margin-top:6px">2. Isi nama 5 orang dalam Members.<br>3. Paste Code.gs terbaru ke Apps Script → Deploy (Manage deployments → Edit → New version).<br>4. (Optional) Set <b>EXPENSE_PIN</b> dalam Script Properties & kongsi dengan group.<br>5. Refresh app ni.</div></div>`;
     return;
   }
@@ -1108,11 +1108,12 @@ function renderMoney(){
       const ic=CAT_ICON[r.category]||"💠";
       const cur=String(r.currency||"RM");
       const amtTxt=cur==="JPY"?("¥"+Number(r.amount).toLocaleString()):rm2(Number(r.amount));
-      const del=ADMIN?`<button class="mini" style="flex:0 0 30px;padding:4px" onclick="confirmDel('Expenses',${r._row},'${jsq(r.title)}')"><i class="ti ti-trash" style="color:var(--red)"></i></button>`:"";
+      const rcpt=r.receipt_link?`<button class="mini" style="flex:0 0 30px;padding:4px" onclick="openLink('${jsq(r.receipt_link)}')" title="Resit">🧾</button>`:"";
+      const adminBtns=ADMIN?`<button class="mini" style="flex:0 0 30px;padding:4px" onclick="editExp(${r._row})"><i class="ti ti-edit"></i></button><button class="mini" style="flex:0 0 30px;padding:4px" onclick="confirmDel('Expenses',${r._row},'${jsq(r.title)}')"><i class="ti ti-trash" style="color:var(--red)"></i></button>`:"";
       listHtml+=`<div class="mrow"><div class="mi">${ic}</div>
         <div class="mt"><div class="t1">${esc(r.title)}</div>
         <div class="t2">D${esc(r.day)} · ${esc(r.date)} · ${esc(r.paid_by)} bayar · split: ${esc(String(r.split_with||"ALL"))}</div></div>
-        <div class="ma"><div class="a1">${amtTxt}</div><div class="a2">${rm2(Number(r.amount_rm)||0)}</div></div>${del}</div>`;
+        <div class="ma"><div class="a1">${amtTxt}</div><div class="a2">${rm2(Number(r.amount_rm)||0)}</div></div>${rcpt}${adminBtns}</div>`;
     });
     listHtml+='</div>';
   }
@@ -1170,6 +1171,8 @@ function openExpenseForm(){
         <div class="unalloc hidden" id="efUnalloc"></div>
         <label class="field-label">Nota (optional)</label>
         <input id="efNotes">
+        <label class="field-label">Resit (optional) — link gambar (Drive/Photos)</label>
+        <input id="efReceipt" placeholder="https://...">
       </div>
       <div class="modal-row">
         <button class="mbtn ghost" onclick="closeModal()">Batal</button>
@@ -1231,7 +1234,8 @@ async function submitExpense(){
     amount:amt,currency:EF.cur,rate_to_rm:rate,
     amount_rm:Math.round(amt*rate*100)/100,
     paid_by:$("#efPayer").value,split_type:EF.split,split_with:splitStr,
-    notes:($("#efNotes").value||"").trim()
+    notes:($("#efNotes").value||"").trim(),
+    receipt_link:($("#efReceipt")&&$("#efReceipt").value||"").trim()
   };
   const hdrs=fieldsFor("Expenses");
   const values=hdrs.map(h=>rec[h]!=null?rec[h]:"");
@@ -1324,6 +1328,7 @@ function findById(tab,id){return rows(tab).find(r=>String(r.id)===String(id));}
 function editItin(id){const r=findById("Itinerary",id);if(!r){toast("Stop tak jumpa — refresh dulu");return;}openEditForm("Itinerary",r._row,r,"Edit stop");}
 function addItin(){const blank={day:curDay,date:(rows("Itinerary").find(x=>String(x.day)===String(curDay))||{}).date||""};openEditForm("Itinerary",null,blank,"Add stop");}
 function editPark(row){const r=findByRow("Parking",row);if(!r){toast("Row tak jumpa — refresh dulu");return;}openEditForm("Parking",row,r,"Edit parking");}
+function editExp(row){const r=findByRow("Expenses",row);if(!r){toast("Row tak jumpa — refresh dulu");return;}openEditForm("Expenses",row,r,"Edit belanja");}
 function editStay(row){const r=findByRow("Accommodation",row);if(!r){toast("Row tak jumpa — refresh dulu");return;}openEditForm("Accommodation",row,r,"Edit stay");}
 
 function openEditForm(tab,rowNum,data,title){
