@@ -846,6 +846,41 @@ function showHalal(){
   `);
 }
 
+// ====== FLIGHTS ======
+// Semua data dari tab Info, category = "Flight". Tambah baris baru dalam Sheet
+// (atau butang Admin bawah) untuk seat, bagasi, dsb — terus keluar di sini.
+function showFlights(){
+  const fl=rows("Info").filter(r=>/^flight$/i.test(String(r.category).trim()));
+  let html="";
+  if(!fl.length){
+    html+='<div class="empty">No flight details yet.</div>';
+  }else{
+    fl.forEach(r=>{
+      const v=String(r.value||"");
+      const isLeg=/→|->|\d{2}:\d{2}/.test(v);
+      html+=`<div class="card" style="margin-bottom:9px">
+        <div style="font-size:11px;color:var(--hint);text-transform:uppercase;letter-spacing:.5px;font-weight:700">${esc(r.key)}</div>
+        <div style="font-size:${isLeg?14:13}px;font-weight:${isLeg?700:500};margin-top:4px;line-height:1.45">${esc(v)}</div>
+        ${ADMIN?`<div style="display:flex;gap:6px;margin-top:8px">
+           <button class="mini" onclick="editInfoRow(${r._row})"><i class="ti ti-edit"></i></button>
+           <button class="mini" onclick="confirmDel('Info',${r._row},'${jsq(r.key)}')"><i class="ti ti-trash" style="color:var(--red)"></i></button>
+         </div>`:""}
+      </div>`;
+    });
+  }
+  html+=`<div class="sect-label">Check-in &amp; status</div>
+    <div class="link-row" onclick="openLink('https://www.airasia.com/')"><i class="ti ti-plane-departure" style="color:var(--red)"></i><span>AirAsia — manage booking / check-in<br><span style="font-weight:400;color:var(--hint);font-size:11px">D7 522 outbound · opens 14 days before</span></span><i class="ti ti-external-link" style="color:var(--hint)"></i></div>
+    <div class="link-row" onclick="openLink('https://www.batikair.com/')"><i class="ti ti-plane-arrival" style="color:var(--navy2)"></i><span>Batik Air — manage booking / check-in<br><span style="font-weight:400;color:var(--hint);font-size:11px">OD873 return · Narita Terminal 2</span></span><i class="ti ti-external-link" style="color:var(--hint)"></i></div>
+    <div class="link-row" onclick="openLink('${mapsSearch("Haneda Airport Terminal 3 arrivals")}')"><i class="ti ti-map-pin" style="color:#7a72d6"></i><span>Haneda T3 — arrivals</span><i class="ti ti-external-link" style="color:var(--hint)"></i></div>
+    <div class="link-row" onclick="openLink('${mapsSearch("Narita Airport Terminal 2 departures")}')"><i class="ti ti-map-pin" style="color:#7a72d6"></i><span>Narita T2 — departures</span><i class="ti ti-external-link" style="color:var(--hint)"></i></div>`;
+  if(ADMIN){
+    html+=`<button class="bigbtn" style="margin-top:12px" onclick="addInfo('Flight')"><i class="ti ti-plus"></i>Add flight detail</button>
+      <div class="binfo" style="margin-top:8px">Add rows such as: Seats · Baggage · Check-in opens · Airport transfer.</div>`;
+  }
+  html+=`<div class="binfo" style="margin-top:10px;color:var(--amber)">⚠️ Avoid storing the full booking reference here — anyone with the app link can read it, and a PNR plus a surname is often enough to change a booking.</div>`;
+  modalScroll("Flights",html);
+}
+
 // ====== TRAINS (yang crucial untuk trip ni sahaja) ======
 function showTrains(){
   modalScroll("Trains — search &amp; booking",`
@@ -997,7 +1032,8 @@ function renderMore(){
     <div class="link-row" onclick="openLink('${mapsSearch("convenience store near me")}')"><i class="ti ti-building-store" style="color:#7c7b76"></i><span>Convenience store</span><i class="ti ti-external-link" style="color:var(--hint)"></i></div>
 
     <div class="sect-label">Information &amp; assistance</div>
-    <div class="link-row" onclick="showInfo()"><i class="ti ti-plane" style="color:var(--navy2)"></i><span>Flight &amp; trip info</span><i class="ti ti-chevron-right" style="color:var(--hint)"></i></div>
+    <div class="link-row" onclick="showFlights()"><i class="ti ti-plane" style="color:var(--navy2)"></i><span>Flights — details &amp; check-in</span><i class="ti ti-chevron-right" style="color:var(--hint)"></i></div>
+    <div class="link-row" onclick="showInfo()"><i class="ti ti-info-circle" style="color:#7a72d6"></i><span>All trip info</span><i class="ti ti-chevron-right" style="color:var(--hint)"></i></div>
     <div class="link-row" onclick="showEmergency()"><i class="ti ti-urgent" style="color:var(--red)"></i><span>Emergency (embassy, hospital, insurance)</span><i class="ti ti-chevron-right" style="color:var(--hint)"></i></div>
     <div class="link-row" onclick="showReminders()"><i class="ti ti-bell" style="color:#d69a3a"></i><span>All reminders</span><i class="ti ti-chevron-right" style="color:var(--hint)"></i></div>
     <div class="binfo" style="margin-top:14px;text-align:center">Data lives in your Google Sheet · edits sync to everyone</div>
