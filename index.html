@@ -375,6 +375,8 @@ nav{position:fixed;bottom:0;left:0;right:0;max-width:520px;margin:0 auto;
 
 <div class="toast" id="toast"></div>
 <div id="modalMount"></div>
+<!-- second layer: PIN prompts that must not destroy the form underneath -->
+<div id="modalMount2"></div>
 
 <script>
 // ====== CONFIG ======
@@ -1174,10 +1176,15 @@ function openExpenseForm(){
         <label class="field-label">Notes (optional)</label>
         <input id="efNotes">
         <label class="field-label">Receipt (optional)</label>
-        <button type="button" class="mini" style="width:100%;padding:12px;margin-bottom:6px"
-                onclick="document.getElementById('efFile').click()">
-          <i class="ti ti-camera"></i> Take photo or choose image
-        </button>
+        <div style="display:flex;gap:8px;margin-bottom:6px">
+          <button type="button" class="mini" style="padding:12px" onclick="document.getElementById('efCam').click()">
+            <i class="ti ti-camera"></i> Camera
+          </button>
+          <button type="button" class="mini" style="padding:12px" onclick="document.getElementById('efFile').click()">
+            <i class="ti ti-photo"></i> Gallery
+          </button>
+        </div>
+        <input type="file" id="efCam" accept="image/*" capture="environment" class="hidden" onchange="onReceiptPick(this)">
         <input type="file" id="efFile" accept="image/*" class="hidden" onchange="onReceiptPick(this)">
         <div class="binfo" id="efRcptState" style="margin-bottom:8px"></div>
         <input id="efReceipt" placeholder="or paste an image link">
@@ -1207,6 +1214,32 @@ function compressImage(file,maxDim,quality){
     fr.readAsDataURL(file);
   });
 }
+// PIN prompt on a second layer, so the expense form underneath survives.
+function askPinLayer(cb){
+  $("#modalMount2").innerHTML=`<div class="overlay" style="z-index:150" onclick="if(event.target===this)closePin()">
+    <div class="modal" style="max-width:340px">
+      <h3>Expense PIN</h3>
+      <p>Enter the group PIN (EXPENSE_PIN). Required once only on this device.</p>
+      <input type="password" inputmode="numeric" id="pinLayerInput" onkeydown="if(event.key==='Enter')pinLayerOk()">
+      <div class="modal-row">
+        <button class="mbtn ghost" onclick="closePin()">Cancel</button>
+        <button class="mbtn primary" onclick="pinLayerOk()">Continue</button>
+      </div>
+    </div></div>`;
+  window._pinCb=cb;
+  setTimeout(()=>$("#pinLayerInput")&&$("#pinLayerInput").focus(),80);
+}
+function closePin(){$("#modalMount2").innerHTML="";window._pinCb=null;}
+function pinLayerOk(){
+  const v=($("#pinLayerInput").value||"").trim();if(!v)return;
+  try{localStorage.setItem(EXPPIN_KEY,v);}catch(e){}
+  const cb=window._pinCb;closePin();if(cb)cb(v);
+}
+function withExpPin(cb){
+  const p=ADMIN?ADMIN_PIN:expPinStored();
+  if(p)cb(p); else askPinLayer(cb);
+}
+
 async function onReceiptPick(input){
   const f=input.files&&input.files[0];if(!f)return;
   const st=$("#efRcptState");
@@ -1214,15 +1247,51 @@ async function onReceiptPick(input){
   if(st)st.innerHTML='<span class="spin"></span> Preparing image…';
   try{
     EF.imgData=await compressImage(f,1600,0.8);
-    const kb=Math.round(EF.imgData.length*0.75/1024);
-    if(st)st.innerHTML='📎 Receipt attached ('+kb+' KB) · uploads when you save '+
-      '<button type="button" class="mini" style="display:inline-flex;flex:0 0 auto;padding:2px 8px;margin-left:6px" onclick="clearReceipt()">remove</button>';
+    showReceiptState();
+    scanReceipt();          // read it straight away
   }catch(e){
     EF.imgData=null;
     if(st)st.textContent="Could not read that image. You may paste a link instead.";
   }
 }
-function clearReceipt(){EF.imgData=null;const i=$("#efFile");if(i)i.value="";const st=$("#efRcptState");if(st)st.textContent="";}
+function showReceiptState(extra){
+  const st=$("#efRcptState");if(!st||!EF.imgData)return;
+  const kb=Math.round(EF.imgData.length*0.75/1024);
+  st.innerHTML='📎 Receipt attached ('+kb+' KB) · uploads when you save'+
+    ' <button type="button" class="mini" style="display:inline-flex;flex:0 0 auto;padding:2px 8px;margin-left:4px" onclick="scanReceipt()">rescan</button>'+
+    '<button type="button" class="mini" style="display:inline-flex;flex:0 0 auto;padding:2px 8px;margin-left:4px" onclick="clearReceipt()">remove</button>'+
+    (extra?('<div style="margin-top:6px">'+extra+'</div>'):"");
+}
+// Read the receipt and pre-fill amount / description. Always editable afterwards.
+function scanReceipt(){
+  if(!EF.imgData){toast("Attach a photo first");return;}
+  const st=$("#efRcptState");
+  if(st)st.innerHTML='<span class="spin"></span> Reading receipt…';
+  withExpPin(async function(pin){
+    const j=await apiPost({action:"ocrReceipt",dataUrl:EF.imgData,lang:"ja"},pin);
+    if(!j.ok){showReceiptState('<span style="color:var(--amber)">Could not read it — please enter the details manually.</span>');
+      if(/PIN/i.test(j.error||"")){try{localStorage.removeItem(EXPPIN_KEY);}catch(e){}}
+      return;}
+    const p=j.parsed||{};const got=[];
+    if(p.total){
+      const amt=$("#efAmt");
+      if(amt&&!String(amt.value).trim()){
+        if(p.currency==="MYR"&&EF.cur!=="MYR")efSetCur("MYR");
+        else if(p.currency==="JPY"&&EF.cur!=="JPY")efSetCur("JPY");
+        amt.value=p.total;expRecalc();
+        got.push("amount "+(p.currency==="MYR"?"RM":"¥")+p.total);
+      }
+    }
+    if(p.title){
+      const t=$("#efTitle");
+      if(t&&!String(t.value).trim()){t.value=p.title;got.push("description");}
+    }
+    showReceiptState(got.length
+      ? '<span style="color:var(--green)">✓ Filled in '+got.join(" and ")+' — please check it is correct.</span>'
+      : '<span style="color:var(--amber)">Nothing recognised. Please enter the details manually.</span>');
+  });
+}
+function clearReceipt(){EF.imgData=null;["#efFile","#efCam"].forEach(s=>{const i=$(s);if(i)i.value="";});const st=$("#efRcptState");if(st)st.textContent="";}
 // Drive share links do not work in <img>; convert them to a displayable form.
 function imgUrl(u){
   const m=String(u||"").match(/drive\.google\.com\/(?:file\/d\/|open\?id=|uc\?id=)([A-Za-z0-9_-]{10,})/);

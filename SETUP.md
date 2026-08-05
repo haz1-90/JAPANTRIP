@@ -70,9 +70,11 @@ dan deploy guna Manage deployments → Edit (bukan New deployment).
 > Tapi sesiapa yang ada URL app boleh nampak — kalau ada member tak selesa,
 > biar kosong; settle guna no. akaun dalam `note`.
 
-### Resit belanja (masa trip) — terus dari telefon
-1. Masa tambah belanja, tekan **"Take photo or choose image"**.
-2. Pilih **Camera** (snap terus) atau **Photo Library** (gambar sedia ada).
+### Resit belanja (masa trip) — snap & auto-isi
+1. Masa tambah belanja, tekan **Camera** (kamera terus buka) atau **Gallery**.
+2. Lepas snap, app **terus baca resit** dan auto-isi **jumlah** + **nama kedai**.
+   Semak & betulkan kalau silap — semua field masih boleh edit.
+   Tekan **rescan** kalau nak cuba baca semula.
 3. Gambar auto-dikecilkan (maks 1600px) supaya laju walaupun wifi hotel perlahan.
 4. Tekan **Save** — gambar dimuat naik dulu, lepas tu baris belanja ditulis.
    Satu prompt PIN sahaja untuk kedua-duanya.
@@ -84,6 +86,11 @@ view* supaya boleh dibuka dari app.
 
 > Masih boleh paste link manual dalam ruang bawah butang tu kalau gambar dah
 > ada kat Drive/Photos.
+
+**Cara OCR berfungsi:** gambar dihantar ke Apps Script, Drive tukar jadi Google Doc
+(OCR terbina dalam, sokong Jepun), teks dibaca, doc sementara terus dibuang. Tiada
+API berbayar, tiada perkhidmatan pihak ketiga. Parser cari label 合計 / 税込 / TOTAL —
+sengaja abaikan 小計 (subtotal), お預り (tunai diberi) dan おつり (baki).
 
 ---
 

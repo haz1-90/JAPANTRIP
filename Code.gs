@@ -112,6 +112,18 @@ function doPost(e) {
       return json({ ok:true, url: 'https://drive.google.com/file/d/' + file.getId() + '/view', id: file.getId() });
     }
 
+    // ---- Baca resit (OCR) — guna penukaran Drive, tiada API berbayar ----
+    if (action === 'ocrReceipt') {
+      if (!body.dataUrl) return json({ ok:false, error:'Tiada gambar' });
+      const om = String(body.dataUrl).match(/^data:(image\/[a-z0-9.+-]+);base64,([\s\S]+)$/i);
+      if (!om) return json({ ok:false, error:'Format gambar tak sah' });
+      const obytes = Utilities.base64Decode(om[2]);
+      if (obytes.length > 10 * 1024 * 1024) return json({ ok:false, error:'Gambar terlalu besar' });
+      const text = ocrText_(Utilities.newBlob(obytes, om[1], 'scan.jpg'), body.lang || 'ja');
+      if (text === null) return json({ ok:false, error:'OCR gagal — cuba gambar lebih jelas' });
+      return json({ ok:true, text: text, parsed: parseReceipt_(text) });
+    }
+
     if (TABS.indexOf(tab) === -1) return json({ ok:false, error:'Tab tak sah' });
     const sh = SS.getSheetByName(tab);
     if (!sh) return json({ ok:false, error:'Tab tak jumpa' });
@@ -159,6 +171,99 @@ function doPost(e) {
   } catch (err) {
     return json({ ok:false, error: String(err) });
   }
+}
+
+// ---- OCR: upload gambar sebagai Google Doc (Drive buat OCR), baca teks, buang ----
+// Guna Drive REST v3 dengan token skrip sendiri — tak perlu enable Advanced Service.
+function ocrText_(blob, lang) {
+  try {
+    const token = ScriptApp.getOAuthToken();
+    const boundary = 'knmocr' + Date.now();
+    const meta = { name: 'ocr-temp-' + Date.now(), mimeType: 'application/vnd.google-apps.document' };
+    let bytes = Utilities.newBlob(
+      '--' + boundary + '\r\nContent-Type: application/json; charset=UTF-8\r\n\r\n' +
+      JSON.stringify(meta) + '\r\n' +
+      '--' + boundary + '\r\nContent-Type: ' + blob.getContentType() + '\r\n\r\n'
+    ).getBytes();
+    bytes = bytes.concat(blob.getBytes()).concat(Utilities.newBlob('\r\n--' + boundary + '--').getBytes());
+
+    const up = UrlFetchApp.fetch(
+      'https://www.googleapis.com/upload/drive/v3/files?uploadType=multipart&ocrLanguage=' + encodeURIComponent(lang),
+      { method: 'post',
+        contentType: 'multipart/related; boundary=' + boundary,
+        payload: bytes,
+        headers: { Authorization: 'Bearer ' + token },
+        muteHttpExceptions: true });
+    if (up.getResponseCode() >= 300) { log_('ocrFail', 'upload', up.getResponseCode()); return null; }
+    const id = JSON.parse(up.getContentText()).id;
+    if (!id) return null;
+
+    const ex = UrlFetchApp.fetch(
+      'https://www.googleapis.com/drive/v3/files/' + id + '/export?mimeType=text/plain',
+      { headers: { Authorization: 'Bearer ' + token }, muteHttpExceptions: true });
+    const txt = ex.getResponseCode() < 300 ? ex.getContentText() : null;
+    try { DriveApp.getFileById(id).setTrashed(true); } catch (e) {}
+    return txt;
+  } catch (err) {
+    log_('ocrFail', String(err).slice(0, 80), '');
+    return null;
+  }
+}
+
+// ---- Cuba teka jumlah / kedai / tarikh dari teks resit ----
+function parseReceipt_(text) {
+  const lines = String(text || '').split(/\r?\n/).map(function (l) { return l.trim(); }).filter(String);
+  const out = { total: null, currency: null, title: null, date: null };
+
+  function num(s) {
+    const n = parseFloat(String(s).replace(/[, ]/g, ''));
+    return isFinite(n) ? n : null;
+  }
+  // Label "jumlah" dalam BJ / BM / BI. 小計/subtotal sengaja TIDAK diambil.
+  const TOTAL = /(合\s*計|お?会計|税込\s*合?計|総額|お買上げ?計|grand\s*total|total\s*amount|jumlah|^total\b)/i;
+  const SUB   = /(小\s*計|subtotal|sub\s*total|お預り|おつり|釣銭|change|tunai|cash)/i;
+
+  let best = null;
+  for (let i = 0; i < lines.length; i++) {
+    const L = lines[i];
+    if (SUB.test(L)) continue;
+    if (!TOTAL.test(L)) continue;
+    // nombor pada baris sama, kalau tiada cuba baris berikut
+    let m = L.match(/(?:¥|￥|RM|MYR)?\s*([0-9][0-9,]*(?:\.[0-9]{1,2})?)/g);
+    let cand = null;
+    if (m && m.length) cand = num(m[m.length - 1].replace(/[^\d.,]/g, ''));
+    if (cand == null && lines[i + 1]) {
+      const m2 = lines[i + 1].match(/([0-9][0-9,]*(?:\.[0-9]{1,2})?)/);
+      if (m2) cand = num(m2[1]);
+    }
+    if (cand != null && cand > 0) { best = cand; if (/¥|￥|円/.test(L)) out.currency = 'JPY';
+                                    if (/RM|MYR/i.test(L)) out.currency = 'MYR'; }
+  }
+  // Tiada label jumpa → ambil nombor harga terbesar sebagai anggaran
+  if (best == null) {
+    let mx = 0;
+    lines.forEach(function (L) {
+      if (SUB.test(L)) return;
+      const all = L.match(/(?:¥|￥|RM)\s*([0-9][0-9,]*(?:\.[0-9]{1,2})?)/g) || [];
+      all.forEach(function (a) { const v = num(a.replace(/[^\d.,]/g, '')); if (v && v > mx) mx = v; });
+    });
+    if (mx > 0) best = mx;
+  }
+  out.total = best;
+  if (!out.currency && /¥|￥|円/.test(text)) out.currency = 'JPY';
+  if (!out.currency && /\bRM\b|MYR/i.test(text)) out.currency = 'MYR';
+
+  // Nama kedai: baris awal yang bermakna (bukan nombor/tarikh/alamat)
+  for (let i = 0; i < Math.min(lines.length, 6); i++) {
+    const L = lines[i];
+    if (L.length < 2 || L.length > 40) continue;
+    if (/^[\d\s\-\/:.,¥￥円]+$/.test(L)) continue;
+    if (/(tel|電話|〒|receipt|領収|レシート|invoice)/i.test(L)) continue;
+    out.title = L; break;
+  }
+  const d = text.match(/(20\d{2})[\/\-年](\d{1,2})[\/\-月](\d{1,2})/);
+  if (d) out.date = d[1] + '-' + ('0' + d[2]).slice(-2) + '-' + ('0' + d[3]).slice(-2);
+  return out;
 }
 
 // ---- Folder Drive untuk resit (dibuat sekali, guna semula) ----
