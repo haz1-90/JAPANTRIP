@@ -283,6 +283,12 @@ nav{position:fixed;bottom:0;left:0;right:0;max-width:520px;margin:0 auto;
 .adj.fixed{background:var(--greenbg);color:var(--green);}
 .link-row .rv{font-weight:800;color:var(--navy2);font-size:15px;}
 
+/* dual clock */
+.clocks{display:flex;gap:9px;margin-bottom:12px;}
+.clk{flex:1;background:var(--card);border:1px solid var(--line);border-radius:12px;padding:9px 12px;box-shadow:var(--shadow);}
+.clk .cl{font-size:10px;color:var(--hint);text-transform:uppercase;letter-spacing:.5px;font-weight:700;}
+.clk .ct{font-size:21px;font-weight:800;letter-spacing:-.5px;margin-top:1px;}
+
 /* money / expenses */
 .mrow{display:flex;align-items:center;gap:10px;padding:10px 0;border-bottom:1px solid var(--line);}
 .mrow:last-child{border-bottom:none;}
@@ -421,7 +427,7 @@ async function refresh(manual){
   }
 }
 function setSync(cls,txt){$("#syncState").innerHTML='<span class="dot '+({ok:"ok",off:"off",load:"load"}[cls])+'"></span>'+esc(txt);}
-function timeNow(){const d=new Date();return d.getHours().toString().padStart(2,"0")+":"+d.getMinutes().toString().padStart(2,"0");}
+function timeNow(){const n=jstNow();return String(n.h).padStart(2,"0")+":"+String(n.mi).padStart(2,"0")+" "+TRIP_TZ_LABEL;}
 
 // ====== NAV ======
 function go(s){
@@ -531,7 +537,24 @@ function parseTimeToMin(t){
 const PACE_KEY="knm_pace_v1";
 function paceMode(){try{return localStorage.getItem(PACE_KEY)||"schedule";}catch(e){return "schedule";}}
 function setPaceMode(m){try{localStorage.setItem(PACE_KEY,m);}catch(e){}renderAll();}
-function nowMin(){const d=new Date();return d.getHours()*60+d.getMinutes();}
+// Semua logik masa guna waktu Jepun (JST), bukan jam telefon. Kalau ikut jam
+// telefon, test dari KL tersasar 1 jam, dan kita bergantung pada setiap telefon
+// betul-betul auto-tukar zon bila mendarat.
+function tzNow(zone,offsetHours){
+  try{
+    const f=new Intl.DateTimeFormat('en-GB',{timeZone:zone,year:'numeric',
+      month:'2-digit',day:'2-digit',hour:'2-digit',minute:'2-digit',hour12:false});
+    const p={};f.formatToParts(new Date()).forEach(x=>{p[x.type]=x.value;});
+    return {y:+p.year,mo:+p.month-1,d:+p.day,h:+p.hour%24,mi:+p.minute};
+  }catch(e){ // Intl tiada sokongan zon: guna offset tetap
+    const t=new Date(Date.now()+offsetHours*3600000);
+    return {y:t.getUTCFullYear(),mo:t.getUTCMonth(),d:t.getUTCDate(),h:t.getUTCHours(),mi:t.getUTCMinutes()};
+  }
+}
+function jstNow(){return tzNow('Asia/Tokyo',9);}
+function mytNow(){return tzNow('Asia/Kuala_Lumpur',8);}
+function hhmm(n){return String(n.h).padStart(2,"0")+":"+String(n.mi).padStart(2,"0");}
+function nowMin(){const n=jstNow();return n.h*60+n.mi;}
 // Trip window is read from Info (key "Dates", e.g. "8-15 November 2026 (7 nights)")
 // so shifting the trip only needs a Sheet edit; falls back to 8-15 Nov 2026.
 function tripWindow(){
@@ -545,8 +568,8 @@ function tripWindow(){
   return {d1:8,d2:15,mo:10,yr:2026};
 }
 function tripActive(){
-  const d=new Date(),w=tripWindow();
-  const inWin=(d.getFullYear()===w.yr&&d.getMonth()===w.mo&&d.getDate()>=w.d1&&d.getDate()<=w.d2);
+  const d=jstNow(),w=tripWindow();
+  const inWin=(d.y===w.yr&&d.mo===w.mo&&d.d>=w.d1&&d.d<=w.d2);
   const started=rows("Itinerary").some(r=>String(r.status).toLowerCase()==="done");
   return inWin||started;
 }
@@ -672,7 +695,14 @@ function renderToday(){
   const doneBtn=ADMIN?`<button class="bigbtn" onclick="markDone('${jsq(next.id)}')"><i class="ti ti-check"></i>Mark done · next stop</button>`:"";
   const pill=pacePill(next);
 
+  const jn=jstNow(),mn=mytNow();
+  const clocks=`<div class="clocks">
+      <div class="clk"><div class="cl">Japan · JST</div><div class="ct">${hhmm(jn)}</div></div>
+      <div class="clk"><div class="cl">Malaysia · MYT</div><div class="ct">${hhmm(mn)}</div></div>
+    </div>`;
+
   $("#todayBody").innerHTML=`
+    ${clocks}
     ${paceToggle()}
     <div class="eyebrow">Day ${esc(next.day)} · ${esc(next.date)}</div>
     <div style="font-size:12px;color:var(--navy);font-weight:700;margin-bottom:7px;letter-spacing:.5px;">NEXT STOP</div>
@@ -759,33 +789,51 @@ function cvtSet(v){const el=$("#cvJPY");if(el){el.value=v;cvtJPY();}}
 // ====== PRAYER TIMES (ikut lokasi stop semasa, Aladhan API) ======
 const PRAYER_METHOD=3; // Muslim World League
 function to12(hhmm){const m=String(hhmm||"").match(/(\d{1,2}):(\d{2})/);if(!m)return hhmm||"—";let h=+m[1];const mm=m[2],ap=h<12?"AM":"PM",hh=(h%12)||12;return hh+":"+mm+" "+ap;}
+async function timingsFor(lat,lng,dateParts){
+  const dd=String(dateParts.d).padStart(2,"0")+"-"+String(dateParts.mo+1).padStart(2,"0")+"-"+dateParts.y;
+  const key="knm_pray_"+lat+"_"+lng+"_"+dd;
+  let t=null;try{t=JSON.parse(localStorage.getItem(key));}catch(e){}
+  if(t)return t;
+  const r=await fetch("https://api.aladhan.com/v1/timings/"+dd+"?latitude="+lat+"&longitude="+lng+"&method="+PRAYER_METHOD);
+  const j=await r.json();t=j.data.timings;
+  try{localStorage.setItem(key,JSON.stringify(t));}catch(e){}
+  return t;
+}
+function prayTable(t){
+  const P=[["Fajr",t.Fajr],["Sunrise ☀️",t.Sunrise],["Dhuhr",t.Dhuhr],["Asr",t.Asr],
+           ["Sunset 🌇",t.Sunset||t.Maghrib],["Maghrib",t.Maghrib],["Isha",t.Isha]];
+  return P.map(p=>`<div class="irow"><span class="k">${p[0]}</span><span class="v" style="font-size:15px">${to12(p[1])}</span></div>`).join("");
+}
 async function showPrayer(){
   const it=rows("Itinerary");
   const cur=it.find(r=>String(r.status).toLowerCase()!=="done")||it[0]||{};
-  const lat=cur.lat,lng=cur.lng,loc=cur.location||cur.activity||"lokasi semasa";
+  const lat=cur.lat,lng=cur.lng,loc=cur.location||cur.activity||"current stop";
   $("#modalMount").innerHTML=`<div class="overlay" onclick="if(event.target===this)closeModal()">
-    <div class="modal" style="max-height:82vh;display:flex;flex-direction:column">
-      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px">
-        <h3 style="margin:0">Prayer Times</h3><button class="mini" style="flex:0 0 34px" onclick="closeModal()"><i class="ti ti-x"></i></button>
+    <div class="modal" style="max-height:85vh;display:flex;flex-direction:column">
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px">
+        <h3 style="margin:0">Prayer times &amp; sun</h3><button class="mini" style="flex:0 0 34px" onclick="closeModal()"><i class="ti ti-x"></i></button>
       </div>
-      <p style="margin:0 0 12px">${esc(loc)}</p>
-      <div id="prayBody"><div class="empty"><span class="spin"></span><br>Loading…</div></div>
+      <div id="prayBody" style="overflow-y:auto"><div class="empty"><span class="spin"></span><br>Loading…</div></div>
     </div></div>`;
-  if(!lat||!lng){$("#prayBody").innerHTML='<div class="empty">No coordinates are available for this location.</div>';return;}
+  const jn=jstNow(),mn=mytNow();
+  let html="";
+  // Japan — ikut koordinat stop semasa
   try{
-    const d=new Date();
-    const dd=String(d.getDate()).padStart(2,"0")+"-"+String(d.getMonth()+1).padStart(2,"0")+"-"+d.getFullYear();
-    const key="knm_pray_"+lat+"_"+lng+"_"+dd;
-    let t=null;try{t=JSON.parse(localStorage.getItem(key));}catch(e){}
-    if(!t){
-      const r=await fetch("https://api.aladhan.com/v1/timings/"+dd+"?latitude="+lat+"&longitude="+lng+"&method="+PRAYER_METHOD);
-      const j=await r.json();t=j.data.timings;try{localStorage.setItem(key,JSON.stringify(t));}catch(e){}
+    if(lat&&lng){
+      const t=await timingsFor(lat,lng,jn);
+      html+=`<div class="sect-label" style="margin-top:0">🇯🇵 ${esc(loc)} · JST</div>`+prayTable(t);
+    }else{
+      html+=`<div class="sect-label" style="margin-top:0">🇯🇵 Japan</div><div class="binfo">No coordinates for this stop.</div>`;
     }
-    const P=[["Fajr",t.Fajr],["Sunrise",t.Sunrise],["Dhuhr",t.Dhuhr],["Asr",t.Asr],["Maghrib",t.Maghrib],["Isha",t.Isha]];
-    $("#prayBody").innerHTML='<div style="overflow-y:auto">'+P.map(p=>`<div class="irow"><span class="k">${p[0]}</span><span class="v" style="font-size:15px">${to12(p[1])}</span></div>`).join("")+'<div class="binfo" style="margin-top:10px">Calculation method: Muslim World League · based on the coordinates of the current stop.</div></div>';
-  }catch(e){
-    $("#prayBody").innerHTML='<div class="empty">Prayer times could not be retrieved. An internet connection is required.</div>';
-  }
+  }catch(e){html+=`<div class="sect-label" style="margin-top:0">🇯🇵 Japan</div><div class="binfo">Could not load — internet required.</div>`;}
+  // Malaysia — Kuala Lumpur
+  try{
+    const t2=await timingsFor(3.139,101.6869,mn);
+    html+=`<div class="sect-label">🇲🇾 Kuala Lumpur · MYT</div>`+prayTable(t2);
+  }catch(e){html+=`<div class="sect-label">🇲🇾 Kuala Lumpur</div><div class="binfo">Could not load — internet required.</div>`;}
+  html+=`<div class="link-row" style="margin-top:12px" onclick="openLink('https://www.e-solat.gov.my/')"><i class="ti ti-building-mosque" style="color:#0F6E56"></i><span>e-Solat JAKIM (official Malaysia)</span><i class="ti ti-external-link" style="color:var(--hint)"></i></div>`;
+  html+=`<div class="binfo" style="margin-top:8px">Method: Muslim World League. Japan times follow the current stop's coordinates; Malaysia times are for Kuala Lumpur.</div>`;
+  $("#prayBody").innerHTML=html;
 }
 
 // ====== HALAL / MASJID ======
@@ -795,6 +843,21 @@ function showHalal(){
     <div class="link-row" onclick="openLink('https://www.halalgourmet.jp/')"><i class="ti ti-checkbox" style="color:#0F6E56"></i><span>Halal Gourmet Japan</span><i class="ti ti-external-link" style="color:var(--hint)"></i></div>
     <div class="link-row" onclick="openLink('https://halalnavi.com/')"><i class="ti ti-compass" style="color:#534AB7"></i><span>Halal Navi</span><i class="ti ti-external-link" style="color:var(--hint)"></i></div>
     <div class="link-row" onclick="openLink('${mapsSearch("mosque musholla near me")}')"><i class="ti ti-building-mosque" style="color:#0F6E56"></i><span>Mosques and prayer rooms nearby</span><i class="ti ti-external-link" style="color:var(--hint)"></i></div>
+  `);
+}
+
+// ====== TRAINS (yang crucial untuk trip ni sahaja) ======
+function showTrains(){
+  modalScroll("Trains — search &amp; booking",`
+    <div class="sect-label" style="margin-top:0">Check times &amp; routes</div>
+    <div class="link-row" onclick="openLink('https://world.jorudan.co.jp/mln/en/')"><i class="ti ti-search" style="color:var(--navy2)"></i><span>Jorudan — route &amp; timetable (English)</span><i class="ti ti-external-link" style="color:var(--hint)"></i></div>
+    <div class="link-row" onclick="openLink('https://japantravel.navitime.com/en/')"><i class="ti ti-route" style="color:var(--navy2)"></i><span>NAVITIME for Japan Travel</span><i class="ti ti-external-link" style="color:var(--hint)"></i></div>
+
+    <div class="sect-label">Book seats</div>
+    <div class="link-row" onclick="openLink('https://smart-ex.jp/en/')"><i class="ti ti-ticket" style="color:#0F6E56"></i><span>Smart-EX — Tokaido Shinkansen<br><span style="font-weight:400;color:var(--hint);font-size:11px">Nozomi (Day 2) &amp; Hikari (Day 4)</span></span><i class="ti ti-external-link" style="color:var(--hint)"></i></div>
+    <div class="link-row" onclick="openLink('https://www.eki-net.com/en/')"><i class="ti ti-ticket" style="color:#c0562f"></i><span>eki-net (JR East) — Fuji Excursion<br><span style="font-weight:400;color:var(--hint);font-size:11px">Reminder R5 · opens 1 month before, 12 Oct</span></span><i class="ti ti-external-link" style="color:var(--hint)"></i></div>
+
+    <div class="binfo" style="margin-top:10px">Seat reservations open one month ahead. Fuji Excursion (Kawaguchiko → Shinjuku) sells out — book on the day it opens.</div>
   `);
 }
 
@@ -927,7 +990,8 @@ function renderMore(){
     <div class="link-row" onclick="showBudget()"><i class="ti ti-receipt" style="color:#7a72d6"></i><span>Full budget breakdown</span><i class="ti ti-chevron-right" style="color:var(--hint)"></i></div>
 
     <div class="sect-label">Tools</div>
-    <div class="link-row" onclick="showPrayer()"><i class="ti ti-building-mosque" style="color:#0F6E56"></i><span>Prayer times (by location)</span><i class="ti ti-chevron-right" style="color:var(--hint)"></i></div>
+    <div class="link-row" onclick="showPrayer()"><i class="ti ti-building-mosque" style="color:#0F6E56"></i><span>Prayer times &amp; sun · JP + MY</span><i class="ti ti-chevron-right" style="color:var(--hint)"></i></div>
+    <div class="link-row" onclick="showTrains()"><i class="ti ti-train" style="color:var(--navy2)"></i><span>Trains — search &amp; booking</span><i class="ti ti-chevron-right" style="color:var(--hint)"></i></div>
     <div class="link-row" onclick="showCurrency()"><i class="ti ti-currency-yen" style="color:#534AB7"></i><span>Currency converter (¥ ⇄ RM)</span><i class="ti ti-chevron-right" style="color:var(--hint)"></i></div>
     <div class="link-row" onclick="showHalal()"><i class="ti ti-tools-kitchen-2" style="color:#c0562f"></i><span>Halal food &amp; mosques</span><i class="ti ti-chevron-right" style="color:var(--hint)"></i></div>
     <div class="link-row" onclick="openLink('${mapsSearch("convenience store near me")}')"><i class="ti ti-building-store" style="color:#7c7b76"></i><span>Convenience store</span><i class="ti ti-external-link" style="color:var(--hint)"></i></div>
@@ -1056,8 +1120,8 @@ function settleSuggest(){
   return out;
 }
 function tripDayNow(){
-  const d=new Date(),w=tripWindow();
-  if(d.getFullYear()===w.yr&&d.getMonth()===w.mo&&d.getDate()>=w.d1&&d.getDate()<=w.d2)return d.getDate()-w.d1+1;
+  const d=jstNow(),w=tripWindow();
+  if(d.y===w.yr&&d.mo===w.mo&&d.d>=w.d1&&d.d<=w.d2)return d.d-w.d1+1;
   return null;
 }
 
