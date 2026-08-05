@@ -26,10 +26,13 @@ Sheet **JAPAN NOV 2026** yang sedia ada (7 tab lama JANGAN usik). Tab baru
    Kolum `qr_link` & `note` biar kosong dulu (Bahagian D).
 6. Kiri, tekan ⚙️ **Project Settings** → scroll ke **Script Properties**:
    - Pastikan `ADMIN_PIN` masih ada (PIN penuh kau — jangan kongsi).
-   - Tekan **Add script property** → Name: `EXPENSE_PIN` → Value: PIN baru
-     (contoh 6 digit, MESTI lain dari ADMIN_PIN) → Save.
-   - PIN ni nanti kongsi dengan 4 orang lain ikut WhatsApp — dia hanya boleh
-     **tambah belanja**, tak boleh ubah itinerary.
+   - **EXPENSE_PIN adalah PILIHAN:**
+     - **Tak set** (atau padam) = sesiapa yang ada link app boleh terus tambah
+       belanja & muat naik resit, TANPA PIN. Paling senang untuk group.
+       Mereka tetap TAK boleh edit/padam apa-apa atau sentuh tab lain.
+     - **Set** = kena masuk PIN sekali sahaja setiap telefon, lepas tu app ingat.
+     Nak tukar bila-bila: tambah atau padam property ni, deploy semula.
+       (Tak perlu ubah kod — app tanya server sendiri.)
 7. **Benarkan akses Drive** (WAJIB — kalau skip, scan resit akan gagal):
    - ⚙️ **Project Settings** → tanda ✅ **"Show appsscript.json manifest file in editor"**
    - Balik ke **Editor** → buka fail **`appsscript.json`** yang baru muncul
@@ -112,7 +115,7 @@ sengaja abaikan 小計 (subtotal), お預り (tunai diberi) dan おつり (baki)
 | Benda | Di mana |
 |---|---|
 | Tukar itinerary/masa/tempat/budget | Edit Sheet terus, atau app (Admin PIN) |
-| Tambah belanja | App → Expenses (EXPENSE_PIN — semua orang boleh) |
+| Tambah belanja | App → Expenses (tiada PIN kalau EXPENSE_PIN tak di-set) |
 | Edit/padam belanja | Admin dalam app, atau edit Sheet terus |
 | Kadar ¥→RM | Auto (mid-market, refresh 6 jam). Sandaran: Sheet → Info → `Exchange rate` bila offline |
 | Trip anjak tarikh | Sheet → Info → `Dates` (format "8-15 November 2026") |

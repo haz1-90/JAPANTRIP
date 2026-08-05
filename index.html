@@ -391,6 +391,7 @@ const CACHE_KEY = "knm_japan_cache_v1";
 const TRIP_TZ_LABEL = "JST";
 
 let DATA = {};       // {tab: [[headers],[row]...]}
+let CFG = {};        // {expensesOpen:bool} — server yang tentukan, bukan app
 let ADMIN = false;
 let ADMIN_PIN = "";
 let curDay = null;
@@ -411,15 +412,15 @@ function mapsDir(lat,lng,name){if(lat&&lng)return "https://www.google.com/maps/d
 function openLink(u){window.open(u,"_blank");}
 
 // ====== DATA LOAD (hybrid cache) ======
-function loadCache(){try{const c=JSON.parse(localStorage.getItem(CACHE_KEY));if(c&&c.data){DATA=c.data;return c.ts;}}catch(e){}return null;}
-function saveCache(){try{localStorage.setItem(CACHE_KEY,JSON.stringify({ts:Date.now(),data:DATA}));}catch(e){}}
+function loadCache(){try{const c=JSON.parse(localStorage.getItem(CACHE_KEY));if(c&&c.data){DATA=c.data;CFG=c.cfg||{};return c.ts;}}catch(e){}return null;}
+function saveCache(){try{localStorage.setItem(CACHE_KEY,JSON.stringify({ts:Date.now(),data:DATA,cfg:CFG}));}catch(e){}}
 
 async function refresh(manual){
   setSync("load","Syncing…");
   try{
     const r=await fetch(API_URL,{method:"GET"});
     const j=await r.json();
-    if(j.ok){DATA=j.data;saveCache();setSync("ok","Synced "+timeNow());renderAll();if(manual)toast("Up to date");}
+    if(j.ok){DATA=j.data;CFG=j.cfg||{};saveCache();setSync("ok","Synced "+timeNow());renderAll();if(manual)toast("Up to date");}
     else{setSync("off","Sync failed");if(manual)toast("Sync failed");}
   }catch(e){
     setSync("off","Offline — showing saved");
@@ -1492,7 +1493,7 @@ function pinLayerOk(){
 }
 function withExpPin(cb){
   const p=ADMIN?ADMIN_PIN:expPinStored();
-  if(p)cb(p); else askPinLayer(cb);
+  if(p||CFG.expensesOpen)cb(p||""); else askPinLayer(cb);
 }
 
 async function onReceiptPick(input){
@@ -1624,7 +1625,7 @@ async function submitExpense(){
 // Upload the photo (if any) then write the row — both under one PIN prompt.
 async function expenseFlow(rec,imgData){
   const pin=ADMIN?ADMIN_PIN:expPinStored();
-  if(!pin){askExpPin(rec,imgData);return;}
+  if(!pin&&!CFG.expensesOpen){askExpPin(rec,imgData);return;}
   if(imgData){
     toast("Uploading receipt…");
     const up=await apiPost({action:"uploadReceipt",dataUrl:imgData,name:rec.id},pin);
@@ -1639,7 +1640,8 @@ async function expenseFlow(rec,imgData){
 function expPinStored(){try{return localStorage.getItem(EXPPIN_KEY)||"";}catch(e){return "";}}
 async function expensePost(payload,localRec){
   let pin=ADMIN?ADMIN_PIN:expPinStored();
-  if(!pin){askExpPin(payload,localRec);return;}
+  if(!pin&&!CFG.expensesOpen){askExpPin(payload,localRec);return;}
+  pin=pin||"";
   const j=await apiPost(payload,pin);
   if(j.ok){
     if(localRec&&DATA.Expenses){const hdrs=DATA.Expenses[0];DATA.Expenses.push(hdrs.map(h=>localRec[h]!=null?localRec[h]:""));saveCache();}
