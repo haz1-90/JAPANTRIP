@@ -123,6 +123,23 @@ main{padding:14px 14px 22px;}
   box-shadow:0 0 0 0 rgba(18,184,134,.55);animation:nowPulse 2s infinite;}
 @keyframes nowPulse{70%{box-shadow:0 0 0 9px rgba(18,184,134,0);}100%{box-shadow:0 0 0 0 rgba(18,184,134,0);}}
 .upnext{background:var(--soft);border:1px solid var(--line);border-radius:15px;padding:14px 15px;}
+.upnext.tappable{cursor:pointer;transition:background .15s ease;}
+.upnext.tappable:active{background:var(--line);}
+.un-chev{font-size:19px;color:var(--hint);flex:0 0 auto;transition:transform .22s ease;position:relative;top:2px;}
+.upnext.open .un-chev{transform:rotate(180deg);}
+.un-hint{display:flex;align-items:center;gap:6px;font-size:12.5px;color:var(--navy2);font-weight:600;margin-top:7px;}
+.un-hint i{font-size:15px;}
+/* penanda zon waktu — dijana app, bukan sebahagian teks Sheet */
+.tz{font-size:11px;font-weight:800;letter-spacing:.5px;color:var(--navy2);
+  background:var(--accent-soft);padding:2px 6px;border-radius:6px;vertical-align:middle;
+  position:relative;top:-2px;margin-left:6px;}
+.nextcard .time .tz{font-size:12px;top:-9px;}
+/* tajuk bahagian yang boleh diketuk */
+.sect-label.tap{display:flex;align-items:center;gap:8px;cursor:pointer;user-select:none;}
+.sect-label.tap .cnt{background:var(--redbg);color:var(--red);font-size:11px;font-weight:800;
+  min-width:19px;text-align:center;padding:1px 6px;border-radius:9px;}
+.sl-chev{margin-left:auto;font-size:18px;color:var(--hint);transition:transform .22s ease;}
+.sect-label.tap.open .sl-chev{transform:rotate(180deg);}
 .upnext.done{display:flex;align-items:center;gap:10px;color:var(--muted);font-size:14px;}
 .upnext.done i{font-size:20px;color:var(--green);flex:0 0 auto;}
 .un-head{display:flex;align-items:baseline;gap:9px;}
@@ -1020,12 +1037,15 @@ function renderToday(){
   const ico=TYPE_ICON[next.type]||"ti-map-pin",col=TYPE_COLOR[next.type]||"#185FA5";
   const nmode=stopMode(next),nmeta=MODE_META[nmode];
   const dayNum=next.day;
-  let remHtml="";
   const dayRem=it.filter(r=>String(r.day)===String(dayNum)&&String(r.urgent).toUpperCase()==="YES"&&String(r.status).toLowerCase()!=="done");
-  dayRem.slice(0,3).forEach(r=>{
-    remHtml+=`<div class="rem-item"><i class="ti ti-alarm"></i><span>${esc(r.time)} · ${esc(r.activity)}</span></div>`;
-  });
-  if(!remHtml)remHtml='<div class="rem-item soft"><i class="ti ti-info-circle"></i><span>No urgent items right now</span></div>';
+  const impOpen=sectOpen("imp");
+  let remHtml="";
+  if(impOpen){
+    dayRem.forEach(r=>{
+      remHtml+=`<div class="rem-item"><i class="ti ti-alarm"></i><span>${showTime(r)} · ${esc(r.activity)}</span></div>`;
+    });
+    if(!remHtml)remHtml='<div class="rem-item soft"><i class="ti ti-info-circle"></i><span>Nothing marked important right now</span></div>';
+  }
 
   const notes=next.notes?`<div class="tl-notes">${esc(next.notes)}</div>`:"";
   const doneBtn=ADMIN?`<button class="bigbtn" onclick="markDone('${jsq(next.id)}')"><i class="ti ti-check"></i>Done here · go to next</button>`:"";
@@ -1067,7 +1087,7 @@ function renderToday(){
     <div class="nextcard">
       <div class="loc"><i class="ti ${ico}" style="color:${col}"></i>${esc(next.location||next.activity)}</div>
       ${pill?`<div style="margin:9px 0 -2px">${pill}</div>`:""}
-      <div class="time">${esc(next.time)||"—"}</div>
+      <div class="time">${showTime(next)}</div>
       <div style="font-size:15.5px;color:var(--muted);margin-bottom:2px;line-height:1.4;">${esc(next.activity)}</div>
       ${next.transit_info?`<div class="transit big"><i class="ti ti-arrow-guide"></i>${esc(next.transit_info)}</div>`:""}${notes}
       <div class="qbtns">
@@ -1080,7 +1100,12 @@ function renderToday(){
     </div>
     ${upnext}
     ${paceBlock(next)}
-    <div class="sect-label">${preTrip?"Urgent on day "+esc(next.day)+" — not today":"Urgent today"}</div>
+    <div class="sect-label tap ${impOpen?"open":""}" onclick="toggleSect('imp')" role="button" tabindex="0"
+         onkeydown="if(event.key==='Enter'||event.key===' '){toggleSect('imp');event.preventDefault();}">
+      <span>${preTrip?"Important on day "+esc(next.day)+" — not today":"Important today"}</span>
+      ${dayRem.length?`<span class="cnt">${dayRem.length}</span>`:""}
+      <i class="ti ti-chevron-down sl-chev"></i>
+    </div>
     ${remHtml}
   `;
 }
@@ -1092,17 +1117,50 @@ function upNextCard(r){
   if(!r)return `<div class="stop-label then">THEN</div>
     <div class="upnext done"><i class="ti ti-flag-check"></i><div>That is the last stop on the list. Nothing after this.</div></div>`;
   const ico=TYPE_ICON[r.type]||"ti-map-pin",col=TYPE_COLOR[r.type]||"#185FA5";
-  const tr=r.transit_info?`<div class="transit big"><i class="ti ti-arrow-guide"></i>${esc(r.transit_info)}</div>`:"";
+  const open=sectOpen("next");
+  // Tutup dahulu supaya skrin Today pendek; ketuk untuk buka. Pilihan itu
+  // diingat, jadi sesiapa yang suka nampak semua sekali gus buka sekali sahaja.
+  // Nama tempat sahaja tak cukup — di KLIA2 keempat-empat perhentian berlokasi
+  // sama. Jadi aktiviti SENTIASA kelihatan; yang disembunyikan hanya butiran
+  // kereta api dan nota.
+  const extra=r.transit_info||r.notes;
+  const hint=!open&&extra
+    ?`<div class="un-hint"><i class="ti ti-arrow-guide"></i>Tap for ${r.transit_info?"train &amp; ":""}details</div>`:"";
+  const body=open&&extra
+    ?`${r.transit_info?`<div class="transit big"><i class="ti ti-arrow-guide"></i>${esc(r.transit_info)}</div>`:""}
+      ${r.notes?`<div class="tl-notes">${esc(r.notes)}</div>`:""}`:"";
   return `<div class="stop-label then">THEN — NEXT STOP</div>
-    <div class="upnext">
+    <div class="upnext tappable ${open?"open":""}" onclick="toggleSect('next')" role="button" tabindex="0"
+         onkeydown="if(event.key==='Enter'||event.key===' '){toggleSect('next');event.preventDefault();}">
       <div class="un-head">
         <i class="ti ${ico}" style="color:${col}"></i>
         <div class="un-loc">${esc(r.location||r.activity)}</div>
-        <div class="un-time">${esc(r.time)||"—"}</div>
+        <div class="un-time">${showTime(r)}</div>
+        ${extra?'<i class="ti ti-chevron-down un-chev"></i>':""}
       </div>
       <div class="un-act">${esc(r.activity)}</div>
-      ${tr}
+      ${hint}${body}
     </div>`;
+}
+// Bahagian yang boleh dibuka/tutup pada skrin Today. Pilihan disimpan supaya
+// app tak lupa setiap kali render semula.
+const SECT_KEY="knm_sect";
+function sectAll(){try{return JSON.parse(localStorage.getItem(SECT_KEY)||"{}");}catch(e){return {};}}
+function sectOpen(n){return !!sectAll()[n];}
+function toggleSect(n){
+  const s=sectAll();s[n]=!s[n];
+  try{localStorage.setItem(SECT_KEY,JSON.stringify(s));}catch(e){}
+  renderToday();
+}
+// Penanda zon waktu — dijana oleh app, bukan ditaip dalam Sheet, supaya lajur
+// `time` dalam Sheet kekal sama format dengan semua baris lain.
+function zoneTag(r){return isMyRow(r)?' <span class="tz">MYT</span>':'';}
+// Jam untuk dipapar. Kalau sesiapa taip "11:50 AM MYT" dalam Sheet, buang
+// "MYT" itu daripada teks — lencana sudah pun ditambah oleh zoneTag(), dan
+// tanpa ini ia keluar dua kali.
+function showTime(r){
+  const t=String((r&&r.time)||"").replace(/\s*\b(MYT|JST)\b\s*$/i,"").trim();
+  return (t?esc(t):"—")+zoneTag(r);
 }
 // Tanda selesai, kemudian beritahu dengan jelas apa yang seterusnya.
 // Boleh UNDO — sebab tersalah tekan atas telefon memang biasa berlaku.

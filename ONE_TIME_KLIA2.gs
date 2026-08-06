@@ -16,10 +16,11 @@
  *   Tiada baris sedia ada dipadam atau diubah. Tiada tab lain disentuh.
  *   Kalau nak buang semula: padam 4 baris D1-00A..D1-00D dalam Sheet.
  *
- * Masa ditulis dalam WAKTU MALAYSIA dan berakhir dengan "MYT".
- * Jangan buang "MYT" tu — itu yang app guna untuk tahu baris ni waktu
- * Malaysia, supaya jurang KUL→Haneda dikira 6j50m (bukan 7j50m) dan
- * pacing tak tunjuk "Behind 1h" palsu sepanjang pagi di KLIA2.
+ * Masa ditulis dalam WAKTU MALAYSIA, format sama macam baris lain
+ * ("11:50 AM"). App kenal ia waktu Malaysia melalui lokasi "KLIA2", jadi
+ * tiada apa perlu ditaip lain daripada biasa. App sendiri yang papar
+ * lencana MYT di sebelah jam, dan kira jurang KUL→Haneda sebagai 6j50m
+ * (bukan 7j50m) supaya pacing tak tunjuk "Behind 1h" palsu di KLIA2.
  */
 // Pembalut supaya ralat sebenar keluar dalam Execution log. Apps Script
 // kadang-kadang hanya papar "Unknown error" pada bar atas — itu mesej IDE,
@@ -80,7 +81,7 @@ function addKLIA2_() {
   // kolum dalam Sheet berubah suatu hari nanti, ini tetap masuk tempat betul.
   var ROWS = [
     {
-      id: 'D1-00A', day: 1, date: '8 Nov', time: '11:50 AM MYT',
+      id: 'D1-00A', day: 1, date: '8 Nov', time: '11:50 AM',
       activity: 'Sampai KLIA2 — kumpul di Level 3, check-in',
       location: 'KLIA2', lat: 2.7456, lng: 101.6866,
       type: 'transport', urgent: 'YES', status: '',
@@ -88,7 +89,7 @@ function addKLIA2_() {
       notes: 'Sampai 3 jam awal. 5 pax — passport, boarding pass, timbang bagasi'
     },
     {
-      id: 'D1-00B', day: 1, date: '8 Nov', time: '1:50 PM MYT',
+      id: 'D1-00B', day: 1, date: '8 Nov', time: '1:50 PM',
       activity: 'Bag drop TUTUP — kena dah check-in',
       location: 'KLIA2', lat: 2.7456, lng: 101.6866,
       type: 'transport', urgent: 'YES', status: '',
@@ -96,7 +97,7 @@ function addKLIA2_() {
       notes: 'Cut-off keras. Lepas ni bagasi tak boleh masuk'
     },
     {
-      id: 'D1-00C', day: 1, date: '8 Nov', time: '2:00 PM MYT',
+      id: 'D1-00C', day: 1, date: '8 Nov', time: '2:00 PM',
       activity: 'Imigresen & security, terus ke gate',
       location: 'KLIA2', lat: 2.7456, lng: 101.6866,
       type: 'transport', urgent: '', status: '',
@@ -104,7 +105,7 @@ function addKLIA2_() {
       notes: 'Ada di gate sebelum 2:20 PM'
     },
     {
-      id: 'D1-00D', day: 1, date: '8 Nov', time: '2:50 PM MYT',
+      id: 'D1-00D', day: 1, date: '8 Nov', time: '2:50 PM',
       activity: 'Berlepas KUL — D7 522 ke Haneda (6j 50m)',
       location: 'KLIA2', lat: 2.7456, lng: 101.6866,
       type: 'transport', urgent: 'YES', status: '',
@@ -132,12 +133,52 @@ function addKLIA2_() {
   var out = ROWS.map(function (r) {
     return head.map(function (h) { return r.hasOwnProperty(h) ? r[h] : ''; });
   });
+  // Paksa lajur `time` jadi teks biasa DAHULU. Kalau tidak, Sheets tukar
+  // "11:50 AM" jadi nilai masa sebenar, dan app akan terima tarikh 1899
+  // (getValues pulangkan objek Date) — jam pelik keluar pada telefon.
+  var timeCol = head.indexOf('time');
+  if (timeCol !== -1) sh.getRange(anchor, timeCol + 1, ROWS.length, 1).setNumberFormat('@');
   sh.getRange(anchor, 1, ROWS.length, head.length).setValues(out);
   SpreadsheetApp.flush();
 
   Logger.log('SIAP — ' + ROWS.length + ' baris dimasukkan di baris ' + anchor +
              ' (tepat sebelum ' + (existing['D1-01'] ? 'D1-01' : 'baris pertama') + ').');
   Logger.log('Buka app → Refresh. Lepas tu boleh padam fail onetime.gs ini.');
+}
+
+/**
+ * Buang " MYT" dari lajur `time` 4 baris KLIA2, supaya format jam sama
+ * dengan semua baris lain dalam Sheet ("11:50 AM", bukan "11:50 AM MYT").
+ *
+ * App tetap tahu ia waktu Malaysia — pengesanan ikut lokasi "KLIA2" — dan
+ * app sendiri yang papar lencana MYT di sebelah jam.
+ *
+ * Run SEKALI kalau kau dah jalankan addKLIA2 versi lama. Selamat diulang.
+ */
+function tidyKLIA2Times() {
+  var sh = SpreadsheetApp.getActiveSpreadsheet().getSheetByName('Itinerary');
+  if (!sh) { Logger.log('GAGAL: tab "Itinerary" tak jumpa.'); return; }
+  var data = sh.getDataRange().getValues();
+  var head = data[0].map(function (h) { return String(h).trim(); });
+  var idCol = head.indexOf('id'), tCol = head.indexOf('time');
+  if (idCol === -1 || tCol === -1) { Logger.log('GAGAL: kolum id/time tak jumpa.'); return; }
+
+  var mine = { 'D1-00A': 1, 'D1-00B': 1, 'D1-00C': 1, 'D1-00D': 1 };
+  var n = 0;
+  for (var i = 1; i < data.length; i++) {
+    if (!mine[String(data[i][idCol]).trim()]) continue;
+    var v = String(data[i][tCol]);
+    var clean = v.replace(/\s*\bMYT\b\s*$/i, '').trim();
+    if (clean === v) continue;
+    var cell = sh.getRange(i + 1, tCol + 1);
+    cell.setNumberFormat('@');   // kekalkan sebagai teks, jangan jadi nilai masa
+    cell.setValue(clean);
+    Logger.log('  ' + data[i][idCol] + ': "' + v + '"  ->  "' + clean + '"');
+    n++;
+  }
+  SpreadsheetApp.flush();
+  Logger.log(n ? ('SIAP — ' + n + ' jam dikemas. Buka app → Refresh.')
+                : 'Tiada apa nak dikemas (jam dah bersih).');
 }
 
 /**
