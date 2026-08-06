@@ -124,10 +124,30 @@ apa-apa untuk orang itu.
 - **TUKAR ORANG / keluar:** tekan butang **🔒 Lock** sebelah sapaan "Hi ..."
   kat skrin Today. Terus balik ke skrin PIN — tak payah incognito atau clear
   browser data. Berguna masa nak test PIN orang lain.
-- **Tiada timeout untuk PIN pengenalan** — sekali masuk, kekal masuk. Sengaja:
-  app ni untuk orang berusia, tak elok paksa taip PIN tiap kali buka.
-  **Mod admin pula mati sendiri lepas 30 minit** tak disentuh, supaya telefon
-  yang tertinggal atas meja tak boleh dipakai untuk edit/padam.
+
+### Auto-kunci & guna tanpa internet
+
+| | Bila kunci |
+|---|---|
+| Semua orang | **6 jam** tak disentuh (termasuk masa app tertutup) |
+| Mod admin (edit/padam) | **30 minit** tak disentuh |
+
+**Buka semula TANPA internet — boleh.** Setiap kali log masuk berjaya *dalam
+talian*, telefon simpan cap jari PIN (SHA-256 + garam rawak). Lepas tu, kalau
+auto-kunci berlaku di tempat tiada line, taip PIN sama — disahkan terus atas
+telefon, tak perlu server. PIN sebenar tak pernah disimpan.
+
+Syaratnya: orang itu kena pernah log masuk sekali atas telefon tu semasa ada
+internet. Orang lain yang tak pernah guna telefon tu tetap tak boleh masuk.
+
+**Jalan keluar terakhir:** kalau tiada line DAN cap jari tiada, skrin kunci
+tunjuk butang *"No internet — open saved trip (view only)"*. Itinerary, masa
+kereta api dan nombor kecemasan yang tersimpan boleh dibaca. Tak boleh tambah
+belanja atau edit apa-apa sampai log masuk semula.
+
+> Jujur tentang had: PIN 4 angka memang boleh dicuba habis oleh orang teknikal
+> yang pegang telefon tu. Ini pengenalan + halangan biasa, bukan kunci peti besi.
+> Duit & data sebenar tetap dilindungi kunci telefon sendiri.
 
 PIN ini **tidak pernah dihantar ke telefon** — server hanya beritahu app
 "ada PIN" atau "tiada". Jadi tiada siapa boleh baca PIN orang lain.

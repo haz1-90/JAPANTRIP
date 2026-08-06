@@ -326,6 +326,10 @@ nav{position:fixed;bottom:0;left:0;right:0;max-width:520px;margin:0 auto;
 .lock.open .lock-veil{background:linear-gradient(180deg,rgba(4,16,31,.72) 0%,rgba(4,16,31,.28) 18%,
   rgba(4,16,31,.10) 32%,rgba(4,16,31,.42) 50%,rgba(4,16,31,.88) 72%,rgba(4,16,31,.96) 100%);}
 .lock-veil{transition:background .42s ease;}
+.lock-view{display:flex;align-items:center;justify-content:center;gap:6px;width:100%;margin-top:10px;
+  background:transparent;border:1px solid rgba(255,255,255,.28);color:rgba(255,255,255,.9);
+  font-size:12.5px;font-weight:600;padding:10px;border-radius:12px;cursor:pointer;}
+.lock-view:active{background:rgba(255,255,255,.12);}
 .lock-sub{font-size:13px;opacity:.9;min-height:19px;font-weight:500;text-shadow:0 1px 10px rgba(0,0,0,.55);}
 .lock-sub.bad{color:#ffd0cb;opacity:1;font-weight:700;}
 .pindots{display:flex;gap:12px;justify-content:center;margin:12px 0 16px;min-height:14px;}
@@ -562,6 +566,9 @@ nav{position:fixed;bottom:0;left:0;right:0;max-width:520px;margin:0 auto;
         <button class="key alt" onclick="lockBack()">⌫</button>
       </div>
       <button class="lock-go" id="lockGo" onclick="lockSubmit()" disabled>Enter</button>
+      <button class="lock-view hidden" id="lockView" onclick="viewOnly()">
+        <i class="ti ti-eye"></i> No internet — open saved trip (view only)
+      </button>
     </div>
   </div>
 </div>
@@ -569,7 +576,12 @@ nav{position:fixed;bottom:0;left:0;right:0;max-width:520px;margin:0 auto;
 <script>
 // Papar skrin kunci SERTA-MERTA semasa HTML dihurai — tidak menunggu
 // DOMContentLoaded, CSS luar, atau data. Gaya .lock sudah sedia dalam <head>.
+// Juga kunci kalau app ditinggalkan lebih 6 jam — dikira di sini supaya skrin
+// kunci tak berkelip masuk lambat selepas skrin utama sempat terpapar.
 try{
+  var _stale=(Number(localStorage.getItem("knm_last_seen"))||0)>0 &&
+             (Date.now()-Number(localStorage.getItem("knm_last_seen")))>6*60*60*1000;
+  if(_stale){try{localStorage.removeItem("knm_me");localStorage.removeItem("knm_me_pin");}catch(e){}}
   if(!localStorage.getItem("knm_me")){
     var _ls=document.getElementById("lockScreen");
     if(_ls){_ls.classList.remove("hidden");document.body.style.overflow="hidden";}
@@ -699,8 +711,11 @@ async function apiPost(payload,pinOverride,timeoutMs){
     return await r.json();
   }catch(e){
     const aborted=e&&e.name==="AbortError";
-    return {ok:false,error:aborted?"Took too long — check your connection and try again."
-                                  :"Offline — the change was not sent. Please try again when connected."};
+    // netfail = server tak dapat dihubungi (bukan PIN salah). Skrin kunci guna
+    // penanda ni untuk tukar ke pengesahan tempatan bila tiada internet.
+    return {ok:false,netfail:true,
+            error:aborted?"Took too long — check your connection and try again."
+                         :"Offline — the change was not sent. Please try again when connected."};
   }
 }
 async function setStatus(tab,id,status){
@@ -739,6 +754,7 @@ function renderAll(){renderToday();renderTrip();renderPark();renderStay();render
 
 document.addEventListener("DOMContentLoaded",()=>{
   loadFxCache();
+  lockIdleCheck();                   // 6 jam ditinggalkan -> kunci semula
   maybeWelcome();                    // serta-merta — tiada tunggu rangkaian
   const ts=loadCache();
   if(ts){setSync("ok","Saved copy");renderAll();lockReconcile();}
@@ -1563,7 +1579,7 @@ function modalScroll(title,body){
 const ME_KEY="knm_me", EXPPIN_KEY="knm_exp_pin", MEPIN_KEY="knm_me_pin", WELCOME_KEY="knm_welcomed";
 // Nama sesi ini sahaja (admin tak simpan nama dalam localStorage) — supaya
 // sapaan tetap "Hi Admin" dan butang Lock tetap nampak.
-let WHO_NAME="";
+let WHO_NAME="", VIEW_ONLY=false, NETFAIL_SEEN=false;
 const CATS=[["Transport","🚆"],["Accommodation","🏨"],["Food","🍜"],["Activities","🎫"],["Shopping","🛍️"],["Other","💠"]];
 const CAT_ICON=Object.fromEntries(CATS);CAT_ICON["Settlement"]="🤝";
 // keep the earlier Malay labels mapped so rows written before the rename still show an icon
@@ -1602,11 +1618,15 @@ function mePin(){try{return localStorage.getItem(MEPIN_KEY)||"";}catch(e){return
 function meSignOut(){closeModal();lockNow();}
 // Kunci semula terus — buang identiti DAN mod admin, balik ke skrin PIN.
 // Ini yang benarkan tukar orang atas telefon yang sama (dulu kena incognito).
-function lockNow(){
+// auto=true bila dikunci oleh masa tamat, bukan ditekan sendiri.
+// Cap jari PIN (VERIF_KEY) SENGAJA tidak dibuang di sini — itulah yang
+// membolehkan buka semula tanpa internet.
+function lockNow(auto){
   try{localStorage.removeItem(ME_KEY);localStorage.removeItem(MEPIN_KEY);localStorage.removeItem(WELCOME_KEY);}catch(e){}
-  WHO_NAME="";
+  WHO_NAME="";VIEW_ONLY=false;
   adminOff();
   closeModal();renderAll();showLock();
+  if(auto)lockSay("Locked after 6 hours — enter your PIN");
 }
 function adminOff(){
   if(!ADMIN)return;
@@ -1615,15 +1635,96 @@ function adminOff(){
   if(b)b.classList.remove("on");
   if(l)l.textContent="Admin";
 }
-// Mod admin tamat sendiri selepas 30 minit tak disentuh. Identiti biasa TIDAK
-// tamat — app ini untuk orang berusia, tak elok paksa taip PIN tiap kali buka.
+// ---- Auto-kunci ----
+// Admin (boleh edit/padam) tamat lebih cepat daripada identiti biasa.
+// LAST_SEEN disimpan supaya masa app TUTUP pun dikira — kalau tak, tutup app
+// semalaman lepas tu buka balik takkan pernah kunci.
 const ADMIN_IDLE_MS=30*60*1000;
+const LOCK_IDLE_MS=6*60*60*1000;
+const SEEN_KEY="knm_last_seen";
 let LAST_TOUCH=Date.now();
-["pointerdown","keydown","visibilitychange"].forEach(ev=>
-  document.addEventListener(ev,()=>{if(!document.hidden)LAST_TOUCH=Date.now();},{passive:true}));
+function touch(){LAST_TOUCH=Date.now();try{localStorage.setItem(SEEN_KEY,String(LAST_TOUCH));}catch(e){}}
+function lastSeen(){try{return Number(localStorage.getItem(SEEN_KEY))||0;}catch(e){return 0;}}
+["pointerdown","keydown"].forEach(ev=>
+  document.addEventListener(ev,touch,{passive:true}));
+document.addEventListener("visibilitychange",()=>{
+  if(document.hidden){touch();return;}
+  // Balik ke app: kalau lama sangat ditinggalkan, kunci semula.
+  if(!lockNeeded()&&Date.now()-lastSeen()>LOCK_IDLE_MS){lockNow(true);return;}
+  touch();
+});
 setInterval(()=>{
-  if(ADMIN&&Date.now()-LAST_TOUCH>ADMIN_IDLE_MS){adminOff();renderAll();toast("Admin mode timed out");}
+  if(document.hidden)return;
+  const idle=Date.now()-LAST_TOUCH;
+  if(ADMIN&&idle>ADMIN_IDLE_MS){adminOff();renderAll();toast("Admin mode timed out");}
+  if(!lockNeeded()&&idle>LOCK_IDLE_MS)lockNow(true);
 },60*1000);
+// Semasa app mula: kalau kali terakhir disentuh lebih 6 jam lalu, kunci.
+// Dipanggil sebelum data dimuatkan, jadi jangan renderAll() di sini.
+function lockIdleCheck(){
+  if(lockNeeded())return;
+  if(lastSeen()&&Date.now()-lastSeen()>LOCK_IDLE_MS){
+    try{localStorage.removeItem(ME_KEY);localStorage.removeItem(MEPIN_KEY);}catch(e){}
+    WHO_NAME="";adminOff();showLock();
+    lockSay("Locked after 6 hours — enter your PIN");
+    return;
+  }
+  touch();
+}
+
+// ---- Pengesahan PIN tanpa internet ----
+// Masalah sebenar: kalau app auto-kunci di tempat tiada line, signIn ke server
+// akan gagal dan orang itu terkunci daripada itinerary sendiri — tepat masa dia
+// paling perlukan. Jadi setiap kali log masuk BERJAYA dalam talian, kita simpan
+// cap jari PIN (SHA-256 + garam rawak peranti ini) supaya kali seterusnya boleh
+// disahkan terus atas telefon.
+//
+// Jujur tentang had: PIN 4 angka memang boleh dicuba habis oleh sesiapa yang
+// pandai buka localStorage. Ini pengenalan + halangan biasa, bukan kripto.
+// PIN sebenar tetap tidak pernah ditulis ke storan.
+const VERIF_KEY="knm_verif";
+function verifGet(){try{return JSON.parse(localStorage.getItem(VERIF_KEY)||"[]");}catch(e){return [];}}
+function randSalt(){
+  const a=new Uint8Array(16);
+  if(window.crypto&&crypto.getRandomValues)crypto.getRandomValues(a);
+  else for(let i=0;i<16;i++)a[i]=Math.floor(Math.random()*256);
+  return Array.from(a).map(b=>b.toString(16).padStart(2,"0")).join("");
+}
+async function pinHash(salt,pin){
+  const msg=salt+"|"+pin;
+  if(window.crypto&&crypto.subtle&&crypto.subtle.digest){
+    const buf=await crypto.subtle.digest("SHA-256",new TextEncoder().encode(msg));
+    return Array.from(new Uint8Array(buf)).map(b=>b.toString(16).padStart(2,"0")).join("");
+  }
+  // Sandaran untuk pelayar lama tanpa WebCrypto — lemah, tapi lebih baik
+  // daripada menyimpan PIN mentah, dan tak pernah dihantar ke mana-mana.
+  let h1=0x811c9dc5,h2=0x01000193;
+  for(let i=0;i<msg.length;i++){
+    h1=(h1^msg.charCodeAt(i))>>>0;h1=(h1*16777619)>>>0;
+    h2=(h2+msg.charCodeAt(i)*(i+7))>>>0;
+  }
+  return "fnv"+h1.toString(16)+h2.toString(16);
+}
+async function verifSave(name,pin,admin){
+  try{
+    const salt=randSalt();
+    const rec={name:name,admin:!!admin,salt:salt,hash:await pinHash(salt,pin)};
+    const list=verifGet().filter(v=>v.name!==name);
+    list.push(rec);
+    localStorage.setItem(VERIF_KEY,JSON.stringify(list.slice(-8)));
+  }catch(e){}
+}
+// Pulangkan {name,admin} kalau PIN sepadan dengan sesiapa yang pernah log masuk
+// atas peranti ini. Orang yang tak pernah guna telefon ni tetap tak boleh masuk.
+async function verifCheck(pin){
+  const list=verifGet();
+  for(let i=0;i<list.length;i++){
+    const v=list[i];
+    if(!v||!v.salt||!v.hash)continue;
+    if(await pinHash(v.salt,pin)===v.hash)return {name:v.name,admin:!!v.admin};
+  }
+  return null;
+}
 function memberList(){return rows("Members").map(r=>String(r.name||"").trim()).filter(Boolean);}
 
 // ---- Skrin kunci: PIN sahaja, server yang kenal siapa ----
@@ -1644,14 +1745,28 @@ function lockReconcile(){
 function lockOpen(){
   const el=$("#lockScreen");if(!el)return;
   el.classList.add("open");
-  lockDots();lockSay("Enter your PIN");
+  lockDots();lockSay("Enter your PIN");lockViewToggle();
+}
+// Jalan keluar terakhir: tiada line DAN telefon ni tak pernah log masuk, tapi
+// data trip masih tersimpan. Biar dia baca — itinerary, masa kereta api dan
+// nombor kecemasan tak berguna kalau terkunci di tempat tiada isyarat.
+function lockViewToggle(){
+  const b=$("#lockView");if(!b)return;
+  const hasData=(()=>{try{return !!localStorage.getItem(CACHE_KEY);}catch(e){return false;}})();
+  const offline=(navigator.onLine===false)||NETFAIL_SEEN;
+  b.classList.toggle("hidden",!(offline&&hasData));
+}
+function viewOnly(){
+  VIEW_ONLY=true;WHO_NAME="";
+  hideLock();renderAll();
+  toast("View only — sign in when you have internet");
 }
 function showLock(){
   LOCK_BUF="";LOCK_FAILS=0;
   const el=$("#lockScreen");if(!el)return;
   el.classList.remove("hidden");el.classList.remove("open");
   document.body.style.overflow="hidden";
-  lockDots();lockSay("Enter your PIN");
+  lockDots();lockSay("Enter your PIN");lockViewToggle();
 }
 function hideLock(){
   const el=$("#lockScreen");if(el)el.classList.add("hidden");
@@ -1695,10 +1810,21 @@ async function lockSubmit(){
   const go=$("#lockGo");if(go)go.disabled=true;
   lockSay("Checking…");
   const pin=LOCK_BUF;
-  const j=await apiPost({action:"signIn",pin:pin},pin);
+  let j=await apiPost({action:"signIn",pin:pin},pin,12000);
+  // Tiada line? Sahkan dengan cap jari yang disimpan masa log masuk terdahulu.
+  // Tanpa ini, auto-kunci di kampung/gunung = terkunci daripada itinerary sendiri.
+  if(!j.ok&&j.netfail){
+    NETFAIL_SEEN=true;lockViewToggle();
+    const local=await verifCheck(pin);
+    if(local)j={ok:true,name:local.name,admin:local.admin,offline:true};
+    else j={ok:false,error:verifGet().length
+      ? "No internet — PIN not recognised on this phone"
+      : "No internet — sign in once with a connection first"};
+  }
   if(j.ok){
+    if(!j.offline)await verifSave(j.name,pin,j.admin);
     try{localStorage.setItem(MEPIN_KEY,pin);localStorage.setItem(WELCOME_KEY,"1");}catch(e){}
-    WHO_NAME=j.name||"";LAST_TOUCH=Date.now();
+    WHO_NAME=j.name||"";touch();
     if(j.admin){ADMIN=true;ADMIN_PIN=pin;$("#adminBtn").classList.add("on");$("#adminLbl").textContent="Editing";}
     else meStore(j.name);
     LOCK_BUF="";lockDots();hideLock();renderAll();toast("Hi "+j.name+"!");
