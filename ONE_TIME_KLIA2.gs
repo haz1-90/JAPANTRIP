@@ -21,7 +21,50 @@
  * Malaysia, supaya jurang KUL→Haneda dikira 6j50m (bukan 7j50m) dan
  * pacing tak tunjuk "Behind 1h" palsu sepanjang pagi di KLIA2.
  */
+// Pembalut supaya ralat sebenar keluar dalam Execution log. Apps Script
+// kadang-kadang hanya papar "Unknown error" pada bar atas — itu mesej IDE,
+// bukan mesej skrip. Log di bawah ni yang beritahu punca sebenar.
 function addKLIA2() {
+  try {
+    return addKLIA2_();
+  } catch (err) {
+    Logger.log('RALAT SEBENAR: ' + (err && err.message ? err.message : err));
+    Logger.log('Jenis: ' + (err && err.name));
+    if (err && err.stack) Logger.log('Stack: ' + err.stack);
+    throw err;
+  }
+}
+
+// Ujian cepat — Run fungsi ini kalau addKLIA2 gagal tanpa sebab jelas.
+// Ia tak menulis apa-apa; cuma beritahu skrip ini nampak Sheet mana.
+function testKLIA2() {
+  try {
+    var ss = SpreadsheetApp.getActiveSpreadsheet();
+    if (!ss) {
+      Logger.log('MASALAH: getActiveSpreadsheet() = null. Projek skrip ini TIDAK ' +
+                 'terikat pada mana-mana Sheet (standalone). Buka Sheet → ' +
+                 'Extensions → Apps Script, dan letak fail ini dalam projek itu.');
+      return;
+    }
+    Logger.log('Sheet: ' + ss.getName());
+    Logger.log('Tab ada: ' + ss.getSheets().map(function (s) { return s.getName(); }).join(', '));
+    var sh = ss.getSheetByName('Itinerary');
+    if (!sh) { Logger.log('MASALAH: tab "Itinerary" tak jumpa (semak ejaan/huruf besar).'); return; }
+    var d = sh.getDataRange().getValues();
+    Logger.log('Itinerary: ' + (d.length - 1) + ' baris data');
+    Logger.log('Header: ' + d[0].join(' | '));
+    var idCol = d[0].map(function (h) { return String(h).trim(); }).indexOf('id');
+    Logger.log('Kolum "id" di posisi: ' + idCol + (idCol === -1 ? '  <-- MASALAH' : ''));
+    for (var i = 1; i < d.length; i++) {
+      if (String(d[i][idCol]).trim() === 'D1-01') { Logger.log('D1-01 di baris: ' + (i + 1)); break; }
+    }
+    Logger.log('OK — semua elok. Boleh Run addKLIA2.');
+  } catch (err) {
+    Logger.log('RALAT: ' + (err && err.message ? err.message : err));
+  }
+}
+
+function addKLIA2_() {
   var ss = SpreadsheetApp.getActiveSpreadsheet();
   var sh = ss.getSheetByName('Itinerary');
   if (!sh) { Logger.log('GAGAL: tab "Itinerary" tak jumpa.'); return; }
