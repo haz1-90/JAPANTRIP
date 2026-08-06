@@ -133,11 +133,14 @@ function addKLIA2_() {
   var out = ROWS.map(function (r) {
     return head.map(function (h) { return r.hasOwnProperty(h) ? r[h] : ''; });
   });
-  // Paksa lajur `time` jadi teks biasa DAHULU. Kalau tidak, Sheets tukar
-  // "11:50 AM" jadi nilai masa sebenar, dan app akan terima tarikh 1899
-  // (getValues pulangkan objek Date) — jam pelik keluar pada telefon.
-  var timeCol = head.indexOf('time');
-  if (timeCol !== -1) sh.getRange(anchor, timeCol + 1, ROWS.length, 1).setNumberFormat('@');
+  // Paksa lajur `date` DAN `time` jadi teks biasa DAHULU. Kalau tidak, Sheets
+  // tukar "8 Nov" jadi tarikh sebenar dan "11:50 AM" jadi masa sebenar; lepas
+  // tu getValues() pulangkan objek Date dan app terima
+  // "2026-11-08T00:00:00.000Z" — itu yang keluar pada skrin telefon.
+  ['date', 'time'].forEach(function (col) {
+    var c = head.indexOf(col);
+    if (c !== -1) sh.getRange(anchor, c + 1, ROWS.length, 1).setNumberFormat('@');
+  });
   sh.getRange(anchor, 1, ROWS.length, head.length).setValues(out);
   SpreadsheetApp.flush();
 
@@ -160,25 +163,41 @@ function tidyKLIA2Times() {
   if (!sh) { Logger.log('GAGAL: tab "Itinerary" tak jumpa.'); return; }
   var data = sh.getDataRange().getValues();
   var head = data[0].map(function (h) { return String(h).trim(); });
-  var idCol = head.indexOf('id'), tCol = head.indexOf('time');
-  if (idCol === -1 || tCol === -1) { Logger.log('GAGAL: kolum id/time tak jumpa.'); return; }
+  var idCol = head.indexOf('id'), tCol = head.indexOf('time'), dCol = head.indexOf('date');
+  if (idCol === -1) { Logger.log('GAGAL: kolum id tak jumpa.'); return; }
 
-  var mine = { 'D1-00A': 1, 'D1-00B': 1, 'D1-00C': 1, 'D1-00D': 1 };
+  var WANT = {
+    'D1-00A': { date: '8 Nov', time: '11:50 AM' },
+    'D1-00B': { date: '8 Nov', time: '1:50 PM' },
+    'D1-00C': { date: '8 Nov', time: '2:00 PM' },
+    'D1-00D': { date: '8 Nov', time: '2:50 PM' }
+  };
   var n = 0;
   for (var i = 1; i < data.length; i++) {
-    if (!mine[String(data[i][idCol]).trim()]) continue;
-    var v = String(data[i][tCol]);
-    var clean = v.replace(/\s*\bMYT\b\s*$/i, '').trim();
-    if (clean === v) continue;
-    var cell = sh.getRange(i + 1, tCol + 1);
-    cell.setNumberFormat('@');   // kekalkan sebagai teks, jangan jadi nilai masa
-    cell.setValue(clean);
-    Logger.log('  ' + data[i][idCol] + ': "' + v + '"  ->  "' + clean + '"');
-    n++;
+    var id = String(data[i][idCol]).trim();
+    var want = WANT[id];
+    if (!want) continue;
+    [['date', dCol], ['time', tCol]].forEach(function (pair) {
+      var col = pair[1];
+      if (col === -1) return;
+      var cur = data[i][col];
+      // Objek Date = Sheets dah tukar sel ni jadi tarikh/masa sebenar. Itu
+      // punca "2026-11-08T00:00:00.000Z" keluar dalam app.
+      var wasDate = Object.prototype.toString.call(cur) === '[object Date]';
+      var txt = wasDate ? '' : String(cur);
+      if (!wasDate && txt === want[pair[0]]) return;   // dah betul, jangan tulis semula
+      var cell = sh.getRange(i + 1, col + 1);
+      cell.setNumberFormat('@');   // kekal teks — jangan biar Sheets tukar semula
+      cell.setValue(want[pair[0]]);
+      Logger.log('  ' + id + ' ' + pair[0] + ': ' +
+                 (wasDate ? '[nilai tarikh/masa sebenar]' : '"' + txt + '"') +
+                 '  ->  "' + want[pair[0]] + '"');
+      n++;
+    });
   }
   SpreadsheetApp.flush();
-  Logger.log(n ? ('SIAP — ' + n + ' jam dikemas. Buka app → Refresh.')
-                : 'Tiada apa nak dikemas (jam dah bersih).');
+  Logger.log(n ? ('SIAP — ' + n + ' sel dikemas. Buka app → Refresh.')
+                : 'Tiada apa nak dikemas (semua dah betul).');
 }
 
 /**

@@ -676,7 +676,37 @@ function mapsDir(lat,lng,name){if(lat&&lng)return "https://www.google.com/maps/d
 function openLink(u){window.open(u,"_blank");}
 
 // ====== DATA LOAD (hybrid cache) ======
-function loadCache(){try{const c=JSON.parse(localStorage.getItem(CACHE_KEY));if(c&&c.data){DATA=c.data;CFG=c.cfg||{};return c.ts;}}catch(e){}return null;}
+// Google Sheets kadang-kadang tukar sendiri "8 Nov" atau "11:50 AM" jadi nilai
+// tarikh/masa sebenar. Bila itu berlaku, getValues() pulangkan objek Date dan
+// app terima rentetan macam "2026-11-08T00:00:00.000Z" — jam/tarikh pelik
+// keluar pada telefon. Tukar balik ke teks di sini supaya app kebal, tak kira
+// bagaimana sel itu ditaip atau ditulis.
+const MON_SHORT=["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"];
+function isoish(v){return typeof v==="string"&&/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}/.test(v);}
+// Zon waktu projek Apps Script = Asia/Kuala_Lumpur, jadi sel "tarikh sahaja"
+// keluar sebagai tengah malam KL. Anjak +8j dan baca bahagian UTC — betul
+// untuk kedua-dua bentuk yang Sheets hasilkan.
+function isoParts(v){const d=new Date(new Date(v).getTime()+8*3600*1000);return isNaN(d)?null:d;}
+function isoToDate(v){const d=isoParts(v);return d?(d.getUTCDate()+" "+MON_SHORT[d.getUTCMonth()]):String(v);}
+function isoToTime(v){
+  const d=isoParts(v);if(!d)return String(v);
+  let h=d.getUTCHours();const m=d.getUTCMinutes(),ap=h<12?"AM":"PM";
+  h=h%12||12;
+  return h+":"+String(m).padStart(2,"0")+" "+ap;
+}
+function normalizeSheetDates(){
+  Object.keys(DATA||{}).forEach(function(tab){
+    const d=DATA[tab];if(!d||d.length<2||!Array.isArray(d[0]))return;
+    const h=d[0].map(x=>String(x).trim());
+    const dc=h.indexOf("date"),tc=h.indexOf("time");
+    if(dc<0&&tc<0)return;
+    for(let i=1;i<d.length;i++){
+      if(dc>=0&&isoish(d[i][dc]))d[i][dc]=isoToDate(d[i][dc]);
+      if(tc>=0&&isoish(d[i][tc]))d[i][tc]=isoToTime(d[i][tc]);
+    }
+  });
+}
+function loadCache(){try{const c=JSON.parse(localStorage.getItem(CACHE_KEY));if(c&&c.data){DATA=c.data;CFG=c.cfg||{};normalizeSheetDates();return c.ts;}}catch(e){}return null;}
 function saveCache(){try{localStorage.setItem(CACHE_KEY,JSON.stringify({ts:Date.now(),data:DATA,cfg:CFG}));}catch(e){}}
 
 async function refresh(manual){
@@ -699,7 +729,7 @@ async function refresh(manual){
     catch(e){ lastErr=e; if(i===0){setSync("load","Syncing… retrying");await new Promise(r=>setTimeout(r,1200));} }
   }
   if(j&&j.ok){
-    DATA=j.data;CFG=j.cfg||{};saveCache();
+    DATA=j.data;CFG=j.cfg||{};normalizeSheetDates();saveCache();
     setSync("ok","Synced "+timeNow());renderAll();lockReconcile();
     if(manual)toast("Up to date");
     return;
@@ -1638,7 +1668,7 @@ function renderTrip(){
       </div>`
       :`<div class="tl-actions"><button class="mini" onclick="openLink('${dirUrl}')"><i class="ti ${rmeta.icon}" style="color:var(--navy2)"></i> <span style="font-size:11px">${rmeta.label}</span></button>${rmode==="drive"?`<button class="mini" onclick="openLink('${parkingNear(r.location,r.lat,r.lng)}')"><i class="ti ti-parking" style="color:var(--navy2)"></i> <span style="font-size:11px">Parking</span></button>`:""}</div>`;
     html+=`<div class="tl-item ${cls}">
-      <div class="tl-time">${esc(r.time)}${urgent}${adjTag}${done?' <span class="tag-done">done</span>':''}</div>
+      <div class="tl-time">${showTime(r)}${urgent}${adjTag}${done?' <span class="tag-done">done</span>':''}</div>
       <div class="tl-act">${esc(r.activity)}</div>
       <div class="tl-loc">${esc(r.location)}</div>
       ${transit}${notes}${admin}
