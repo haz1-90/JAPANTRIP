@@ -459,6 +459,13 @@ nav{position:fixed;bottom:0;left:0;right:0;max-width:520px;margin:0 auto;
 .doc-det{display:block;font-size:12px;color:#5a5a5a;margin-top:2px;}
 .doc-foot{margin-top:24px;padding-top:12px;border-top:1px solid #ddd;
   font-size:11px;color:#888;text-align:center;}
+/* versi dalam app (tab "All days") — kertas putih yang sama, tetapi
+   dimuatkan terus dalam skrin supaya boleh terus tunjuk pada pegawai */
+.doc-page.inapp{margin:0;padding:20px 17px 26px;box-shadow:var(--shadow);
+  border:1px solid #e2e0d9;border-radius:12px;}
+.doc-page.inapp .doc-head h1{font-size:20px;}
+.doc-page.inapp .doc-foot{margin-top:18px;}
+.daytab.wide{min-width:88px;}
 @media print{
   @page{size:A4;margin:14mm;}
   body.printing>*:not(.printdoc){display:none !important;}
@@ -1685,11 +1692,22 @@ function renderTrip(){
   // compare days as strings: an edited row may come back "2" while others are 2
   const days=[...new Set(it.map(r=>String(r.day)))].filter(d=>d!==""&&d!=="null"&&d!=="undefined");
   if(curDay==null)curDay=days[0];
-  $("#dayTabs").innerHTML=days.map(d=>{
-    const dt=it.find(r=>String(r.day)===d);
-    const wd=dt?weekdayOf(dt.date):"";
-    return `<button class="daytab ${d===String(curDay)?'on':''}" onclick="setDay('${jsq(d)}')">Day ${esc(d)}<br><span style="font-size:10px;opacity:.8">${esc(wd?wd+" ":"")}${esc(dt?dt.date:'')}</span></button>`;
-  }).join("");
+  // Tab pertama "All days": seluruh pelan dalam satu skrol, tanpa ketuk apa-apa.
+  // Berguna bila nak tunjuk pada pegawai kastam/imigresen — mereka mahu lihat
+  // keseluruhan rancangan sekali gus, bukan sehari-sehari.
+  $("#dayTabs").innerHTML=
+    `<button class="daytab wide ${curDay==="all"?'on':''}" onclick="setDay('all')">All days<br><span style="font-size:10px;opacity:.8">Full plan</span></button>`+
+    days.map(d=>{
+      const dt=it.find(r=>String(r.day)===d);
+      const wd=dt?weekdayOf(dt.date):"";
+      return `<button class="daytab ${d===String(curDay)?'on':''}" onclick="setDay('${jsq(d)}')">Day ${esc(d)}<br><span style="font-size:10px;opacity:.8">${esc(wd?wd+" ":"")}${esc(dt?dt.date:'')}</span></button>`;
+    }).join("");
+  if(curDay==="all"){
+    $("#tripBody").innerHTML=
+      `<div class="doc-page inapp">${summaryHTML()}</div>
+       <button class="mini" style="margin:12px auto 0;padding:10px 16px" onclick="showSummary()"><i class="ti ti-printer"></i> Print / save as PDF</button>`;
+    return;
+  }
   const list=it.filter(r=>String(r.day)===String(curDay));
   const activeDay=(it.find(r=>String(r.status).toLowerCase()!=="done")||{}).day;
   const paceOn=ADMIN&&tripActive()&&paceMode()==="flex"&&String(curDay)===String(activeDay);
