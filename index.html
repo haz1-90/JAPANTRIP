@@ -465,6 +465,8 @@ nav{position:fixed;bottom:0;left:0;right:0;max-width:520px;margin:0 auto;
   border:1px solid #e2e0d9;border-radius:12px;}
 .doc-page.inapp .doc-head h1{font-size:20px;}
 .doc-page.inapp .doc-foot{margin-top:18px;}
+.doc-e{width:38px;text-align:right;padding-left:6px !important;}
+.doc-e .mini{padding:3px 7px;display:inline-flex;}
 .daytab.wide{min-width:88px;}
 @media print{
   @page{size:A4;margin:14mm;}
@@ -1704,7 +1706,7 @@ function renderTrip(){
     }).join("");
   if(curDay==="all"){
     $("#tripBody").innerHTML=
-      `<div class="doc-page inapp">${summaryHTML()}</div>
+      `<div class="doc-page inapp">${summaryHTML(ADMIN)}</div>
        <button class="mini" style="margin:12px auto 0;padding:10px 16px" onclick="showSummary()"><i class="ti ti-printer"></i> Print / save as PDF</button>`;
     return;
   }
@@ -1870,7 +1872,9 @@ function infoVal(key){
   const r=rows("Info").find(x=>new RegExp("^"+key+"$","i").test(String(x.key).trim()));
   return r?String(r.value||""):"";
 }
-function summaryHTML(){
+// edit=true menambah butang pensel pada setiap baris (mod admin, paparan dalam
+// app sahaja). Versi cetak SENTIASA tanpa butang — ia jadi PDF.
+function summaryHTML(edit){
   const it=rows("Itinerary");
   const days=[];
   it.forEach(r=>{
@@ -1911,6 +1915,7 @@ function summaryHTML(){
         <td class="doc-t">${esc(t||"—")}${zone?'<span class="doc-tz">'+zone+'</span>':""}</td>
         <td class="doc-a"><span class="doc-act">${esc(r.activity)}</span>
           ${bits.length?`<span class="doc-det">${bits.join(" &nbsp;·&nbsp; ")}</span>`:""}</td>
+        ${edit?`<td class="doc-e"><button class="mini" onclick="editItin('${jsq(r.id)}')"><i class="ti ti-edit"></i></button></td>`:""}
       </tr>`;
     });
     h+=`</table></section>`;
@@ -1924,7 +1929,7 @@ function showSummary(){
       <button class="mbtn ghost" onclick="closeSummary()"><i class="ti ti-x"></i> Close</button>
       <button class="mbtn primary" onclick="window.print()"><i class="ti ti-printer"></i> Print / Save as PDF</button>
     </div>
-    <div class="doc-page">${summaryHTML()}</div>`;
+    <div class="doc-page">${summaryHTML(false)}</div>`;
   el.classList.remove("hidden");
   document.body.classList.add("printing");
   el.scrollTop=0;
