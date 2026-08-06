@@ -121,6 +121,13 @@ apa-apa untuk orang itu.
 - **Buang:** tukar PIN, biarkan medan baru kosong.
 - **LUPA PIN:** kau (admin) kosongkan sel `pin` orang itu dalam Sheet.
   Lepas tu dia boleh set semula sendiri dalam app.
+- **TUKAR ORANG / keluar:** tekan butang **🔒 Lock** sebelah sapaan "Hi ..."
+  kat skrin Today. Terus balik ke skrin PIN — tak payah incognito atau clear
+  browser data. Berguna masa nak test PIN orang lain.
+- **Tiada timeout untuk PIN pengenalan** — sekali masuk, kekal masuk. Sengaja:
+  app ni untuk orang berusia, tak elok paksa taip PIN tiap kali buka.
+  **Mod admin pula mati sendiri lepas 30 minit** tak disentuh, supaya telefon
+  yang tertinggal atas meja tak boleh dipakai untuk edit/padam.
 
 PIN ini **tidak pernah dihantar ke telefon** — server hanya beritahu app
 "ada PIN" atau "tiada". Jadi tiada siapa boleh baca PIN orang lain.
