@@ -424,6 +424,50 @@ nav{position:fixed;bottom:0;left:0;right:0;max-width:520px;margin:0 auto;
 .lockbtn i{font-size:14px;}
 
 
+/* ====== dokumen ringkasan itinerari (skrin + cetakan) ======
+   Sengaja hitam-atas-putih tetap, tidak ikut mod gelap: ia dicetak atau
+   disimpan sebagai PDF, dan PDF gelap membazir dakwat serta sukar dibaca. */
+.printdoc{position:fixed;inset:0;z-index:400;background:#f2f1ec;overflow-y:auto;
+  -webkit-overflow-scrolling:touch;}
+.doc-bar{position:sticky;top:0;display:flex;gap:9px;padding:calc(var(--safe-t) + 10px) 14px 10px;
+  background:#fff;border-bottom:1px solid #e2e0d9;z-index:2;}
+.doc-bar .mbtn{flex:1;}
+.doc-page{background:#fff;color:#1a1a1a;max-width:760px;margin:14px auto 40px;
+  padding:26px 24px 34px;border-radius:4px;box-shadow:0 2px 14px rgba(0,0,0,.10);
+  font-size:14px;line-height:1.5;}
+.doc-head{text-align:center;border-bottom:2px solid #1a1a1a;padding-bottom:14px;margin-bottom:18px;}
+.doc-head h1{font-size:23px;font-weight:800;letter-spacing:-.3px;margin:0 0 6px;}
+.doc-sub{font-size:13px;color:#444;}
+.doc-route{font-size:12px;color:#666;margin-top:6px;line-height:1.6;}
+.doc-flights{border:1px solid #d8d5cc;border-radius:5px;padding:10px 13px;margin-bottom:20px;background:#faf9f6;}
+.doc-fl-t{font-size:10.5px;font-weight:800;letter-spacing:1px;text-transform:uppercase;color:#666;margin-bottom:5px;}
+.doc-fl{font-size:13px;}
+.doc-day{margin-bottom:20px;page-break-inside:avoid;break-inside:avoid;}
+.doc-day h2{font-size:13px;font-weight:800;letter-spacing:.7px;text-transform:uppercase;
+  margin:0 0 5px;padding-bottom:5px;border-bottom:1px solid #1a1a1a;}
+.doc-stay{font-size:12px;color:#555;margin-bottom:8px;}
+.doc-tbl{width:100%;border-collapse:collapse;}
+.doc-tbl td{vertical-align:top;padding:5px 0;border-bottom:1px solid #eeece5;}
+.doc-tbl tr:last-child td{border-bottom:none;}
+/* JANGAN guna nama kelas "key" di sini — ia milik butang papan kekunci
+   skrin kunci (teks putih, bayang), dan baris penting jadi kabur putih. */
+.doc-tbl tr.doc-key .doc-act{font-weight:700;}
+.doc-tbl tr.doc-key .doc-t{color:#000;}
+.doc-t{width:96px;white-space:nowrap;font-weight:700;font-variant-numeric:tabular-nums;padding-right:12px !important;}
+.doc-tz{font-size:9.5px;font-weight:800;color:#666;}
+.doc-act{display:block;}
+.doc-det{display:block;font-size:12px;color:#5a5a5a;margin-top:2px;}
+.doc-foot{margin-top:24px;padding-top:12px;border-top:1px solid #ddd;
+  font-size:11px;color:#888;text-align:center;}
+@media print{
+  @page{size:A4;margin:14mm;}
+  body.printing>*:not(.printdoc){display:none !important;}
+  .printdoc{position:static;background:#fff;overflow:visible;}
+  .no-print{display:none !important;}
+  .doc-page{max-width:none;margin:0;padding:0;box-shadow:none;border-radius:0;font-size:11pt;}
+  .doc-day{margin-bottom:14px;}
+}
+
 /* kad ringkas Today */
 .quick2{display:flex;gap:9px;margin-bottom:12px;}
 .qcard{flex:1;background:var(--card);border:1px solid var(--line);border-radius:12px;padding:10px 12px;
@@ -643,6 +687,7 @@ try{
 }catch(e){}
 </script>
 
+<div class="printdoc hidden" id="printDoc"></div>
 <div class="toast" id="toast"></div>
 <div id="modalMount"></div>
 <!-- second layer: PIN prompts that must not destroy the form underneath -->
@@ -1766,6 +1811,9 @@ function renderMore(){
     <div class="link-row" onclick="showHalal()"><i class="ti ti-tools-kitchen-2" style="color:#c0562f"></i><span>Halal food &amp; mosques</span><i class="ti ti-chevron-right" style="color:var(--hint)"></i></div>
     <div class="link-row" onclick="openLink('${mapsSearch("convenience store near me")}')"><i class="ti ti-building-store" style="color:#7c7b76"></i><span>Convenience store</span><i class="ti ti-external-link" style="color:var(--hint)"></i></div>
 
+    <div class="sect-label">Share</div>
+    <div class="link-row" onclick="showSummary()"><i class="ti ti-file-text" style="color:var(--navy2)"></i><span>Itinerary summary<br><span style="font-weight:400;color:var(--hint);font-size:11px">Print or save as PDF · always current</span></span><i class="ti ti-chevron-right" style="color:var(--hint)"></i></div>
+
     <div class="sect-label">Information &amp; assistance</div>
     <div class="link-row" onclick="showRoster()"><i class="ti ti-users" style="color:#0F6E56"></i><span>Team &amp; my details</span><i class="ti ti-chevron-right" style="color:var(--hint)"></i></div>
     <div class="link-row" onclick="showFlights()"><i class="ti ti-plane" style="color:var(--navy2)"></i><span>Flights — details &amp; check-in</span><i class="ti ti-chevron-right" style="color:var(--hint)"></i></div>
@@ -1774,6 +1822,98 @@ function renderMore(){
     <div class="link-row" onclick="showReminders()"><i class="ti ti-bell" style="color:#d69a3a"></i><span>All reminders</span><i class="ti ti-chevron-right" style="color:var(--hint)"></i></div>
     <div class="binfo" style="margin-top:14px;text-align:center">Data lives in your Google Sheet · edits sync to everyone</div>
   `;
+}
+// ====== RINGKASAN ITINERARI (untuk cetak / simpan PDF) ======
+// Dijana LANGSUNG daripada Sheet setiap kali dibuka — bukan fail statik.
+// Jadi bila masa/tempat diubah dalam Sheet, dokumen ni terus ikut. Tiada
+// versi lama tertinggal dalam WhatsApp orang lain yang perlu dikemas manual.
+const MON_FULL=["January","February","March","April","May","June","July",
+                "August","September","October","November","December"];
+function longDate(dateStr){
+  const m=String(dateStr||"").match(/(\d{1,2})\s*([A-Za-z]{3})/);
+  if(!m)return String(dateStr||"");
+  const mo=MON3[m[2].toLowerCase()];
+  if(mo==null)return String(dateStr||"");
+  return (+m[1])+" "+MON_FULL[mo]+" "+tripWindow().yr;
+}
+// Hotel untuk MALAM hari itu — dibaca dari tab Accommodation ("8-9 Nov"
+// bermaksud menginap pada malam 8hb sahaja).
+function overnightFor(dateStr){
+  const m=String(dateStr||"").match(/(\d{1,2})/);
+  if(!m)return null;
+  const d=+m[1];
+  return rows("Accommodation").find(a=>{
+    const r=String(a.dates||"").match(/(\d{1,2})\s*[-–]\s*(\d{1,2})/);
+    if(!r)return false;
+    return d>=+r[1]&&d<+r[2];
+  })||null;
+}
+function infoVal(key){
+  const r=rows("Info").find(x=>new RegExp("^"+key+"$","i").test(String(x.key).trim()));
+  return r?String(r.value||""):"";
+}
+function summaryHTML(){
+  const it=rows("Itinerary");
+  const days=[];
+  it.forEach(r=>{
+    const k=String(r.day);
+    let d=days.find(x=>x.day===k);
+    if(!d){d={day:k,date:r.date,rows:[]};days.push(d);}
+    d.rows.push(r);
+  });
+  const w=tripWindow();
+  let h=`<div class="doc-head">
+      <h1>Japan Trip Itinerary</h1>
+      <div class="doc-sub">${esc(infoVal("Dates")||(w.d1+"–"+w.d2+" "+MON_FULL[w.mo]+" "+w.yr))}</div>
+      ${infoVal("Travellers")?`<div class="doc-sub">${esc(infoVal("Travellers"))}</div>`:""}
+      ${infoVal("Route")?`<div class="doc-route">${esc(infoVal("Route").replace(/->/g,"→"))}</div>`:""}
+    </div>`;
+  const outb=infoVal("Outbound"),retn=infoVal("Return");
+  if(outb||retn){
+    h+=`<div class="doc-flights"><div class="doc-fl-t">Flights</div>`;
+    if(outb)h+=`<div class="doc-fl">Outbound &nbsp;·&nbsp; ${esc(outb.replace(/->/g,"→"))}</div>`;
+    if(retn)h+=`<div class="doc-fl">Return &nbsp;·&nbsp; ${esc(retn.replace(/->/g,"→"))}</div>`;
+    h+=`</div>`;
+  }
+  days.forEach(d=>{
+    const wd=weekdayOf(d.date,true);
+    const stay=overnightFor(d.date);
+    h+=`<section class="doc-day">
+      <h2>Day ${esc(d.day)} &nbsp;·&nbsp; ${esc(wd?wd.toUpperCase():"")} ${esc(longDate(d.date))}</h2>`;
+    if(stay)h+=`<div class="doc-stay">Overnight: <b>${esc(stay.name)}</b>${stay.address?" — "+esc(stay.address):""}</div>`;
+    h+=`<table class="doc-tbl">`;
+    d.rows.forEach(r=>{
+      const t=String(r.time||"").replace(/\s*\b(MYT|JST)\b\s*$/i,"").trim();
+      const zone=isMyRow(r)?" MYT":"";
+      const bits=[];
+      if(r.location&&String(r.location).trim()!==String(r.activity).trim())bits.push(esc(r.location));
+      if(r.transit_info)bits.push(esc(r.transit_info));
+      if(r.notes)bits.push(esc(r.notes));
+      h+=`<tr${String(r.urgent).toUpperCase()==="YES"?' class="doc-key"':""}>
+        <td class="doc-t">${esc(t||"—")}${zone?'<span class="doc-tz">'+zone+'</span>':""}</td>
+        <td class="doc-a"><span class="doc-act">${esc(r.activity)}</span>
+          ${bits.length?`<span class="doc-det">${bits.join(" &nbsp;·&nbsp; ")}</span>`:""}</td>
+      </tr>`;
+    });
+    h+=`</table></section>`;
+  });
+  h+=`<div class="doc-foot">Generated from the live trip sheet · times may still be adjusted</div>`;
+  return h;
+}
+function showSummary(){
+  const el=$("#printDoc");if(!el)return;
+  el.innerHTML=`<div class="doc-bar no-print">
+      <button class="mbtn ghost" onclick="closeSummary()"><i class="ti ti-x"></i> Close</button>
+      <button class="mbtn primary" onclick="window.print()"><i class="ti ti-printer"></i> Print / Save as PDF</button>
+    </div>
+    <div class="doc-page">${summaryHTML()}</div>`;
+  el.classList.remove("hidden");
+  document.body.classList.add("printing");
+  el.scrollTop=0;
+}
+function closeSummary(){
+  const el=$("#printDoc");if(el){el.classList.add("hidden");el.innerHTML="";}
+  document.body.classList.remove("printing");
 }
 function showBudget(){
   const bud=rows("Budget");let html="";
