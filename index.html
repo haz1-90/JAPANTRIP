@@ -609,15 +609,35 @@ function saveCache(){try{localStorage.setItem(CACHE_KEY,JSON.stringify({ts:Date.
 
 async function refresh(manual){
   setSync("load","Syncing…");
-  try{
-    const r=await fetch(API_URL,{method:"GET"});
-    const j=await r.json();
-    if(j.ok){DATA=j.data;CFG=j.cfg||{};saveCache();setSync("ok","Synced "+timeNow());renderAll();lockReconcile();if(manual)toast("Up to date");}
-    else{setSync("off","Sync failed");if(manual)toast("Sync failed");}
-  }catch(e){
-    setSync("off","Offline — showing saved");
-    if(manual)toast("Offline — showing saved copy");
+  // Apps Script kadang lambat bangun (cold start) atau data mudah alih tersekat
+  // sekejap. Dulu satu kegagalan terus papar "Offline" walaupun internet ada —
+  // sekarang cuba dua kali, dan bezakan tiada internet vs server tak jawab.
+  const attempt=async(ms)=>{
+    const ac=("AbortController" in window)?new AbortController():null;
+    const t=ac?setTimeout(()=>ac.abort(),ms):null;
+    try{
+      const r=await fetch(API_URL+"?t="+Date.now(),{method:"GET",signal:ac?ac.signal:undefined});
+      if(t)clearTimeout(t);
+      return await r.json();
+    }catch(e){ if(t)clearTimeout(t); throw e; }
+  };
+  let j=null,lastErr=null;
+  for(let i=0;i<2;i++){
+    try{ j=await attempt(i===0?12000:20000); break; }
+    catch(e){ lastErr=e; if(i===0){setSync("load","Syncing… retrying");await new Promise(r=>setTimeout(r,1200));} }
   }
+  if(j&&j.ok){
+    DATA=j.data;CFG=j.cfg||{};saveCache();
+    setSync("ok","Synced "+timeNow());renderAll();lockReconcile();
+    if(manual)toast("Up to date");
+    return;
+  }
+  const offline=("onLine" in navigator)&&!navigator.onLine;
+  const msg = offline ? "No internet — showing saved"
+            : (j&&j.error) ? "Server error — showing saved"
+            : "Can't reach server — showing saved";
+  setSync("off",msg);
+  if(manual)toast(offline?"No internet connection":"Server did not respond — showing saved copy");
 }
 function setSync(cls,txt){$("#syncState").innerHTML='<span class="dot '+({ok:"ok",off:"off",load:"load"}[cls])+'"></span>'+esc(txt);}
 function timeNow(){const n=jstNow();return String(n.h).padStart(2,"0")+":"+String(n.mi).padStart(2,"0")+" "+TRIP_TZ_LABEL;}
@@ -718,6 +738,8 @@ document.addEventListener("DOMContentLoaded",()=>{
   if(ts){setSync("ok","Saved copy");renderAll();lockReconcile();}
   refresh(false);
   refreshFx(false).then(v=>{if(v)renderAll();});
+  // Bila peranti kembali dalam talian, segar semula sendiri
+  window.addEventListener("online",()=>{refresh(false);refreshFx(true);});
   // PWA: register service worker for offline app shell
   if("serviceWorker" in navigator){
     window.addEventListener("load",()=>{navigator.serviceWorker.register("sw.js").catch(()=>{});});
@@ -779,6 +801,19 @@ function tripActive(){
 }
 function fmtMin(m){m=((Math.round(m)%1440)+1440)%1440;let h=Math.floor(m/60),mm=m%60,ap=h<12?"AM":"PM",hh=h%12;if(hh===0)hh=12;return hh+":"+String(mm).padStart(2,"0")+" "+ap;}
 function fmtDur(m){m=Math.max(0,Math.round(m));const h=Math.floor(m/60),mm=m%60;if(h&&mm)return h+"h "+mm+"m";if(h)return h+"h";return mm+"m";}
+// Sheet simpan "8 Nov" sahaja — tiada nama hari. Kira dari tahun trip supaya
+// "Fri 13 Nov" jelas (penting: Solat Jumaat & pulangkan kereta hari Sabtu).
+const MON3={jan:0,feb:1,mar:2,apr:3,may:4,jun:5,jul:6,aug:7,sep:8,oct:9,nov:10,dec:11};
+const DAYS3=["Sun","Mon","Tue","Wed","Thu","Fri","Sat"];
+const DAYSFULL=["Sunday","Monday","Tuesday","Wednesday","Thursday","Friday","Saturday"];
+function weekdayOf(dateStr,full){
+  const m=String(dateStr||"").match(/(\d{1,2})\s*([A-Za-z]{3})/);
+  if(!m)return "";
+  const mo=MON3[m[2].toLowerCase()];
+  if(mo==null)return "";
+  const d=new Date(Date.UTC(tripWindow().yr,mo,+m[1]));
+  return (full?DAYSFULL:DAYS3)[d.getUTCDay()];
+}
 function dayList(day){return rows("Itinerary").filter(r=>String(r.day)===String(day));}
 function nextAnchor(list,fromIdx){
   for(let i=fromIdx;i<list.length;i++){
@@ -923,7 +958,7 @@ function renderToday(){
     ${hi}
     ${clocks}
     ${paceToggle()}
-    <div class="eyebrow">Day ${esc(next.day)} · ${esc(next.date)}</div>
+    <div class="eyebrow">Day ${esc(next.day)} · ${esc(weekdayOf(next.date,true))} ${esc(next.date)}</div>
     <div style="font-size:12px;color:var(--navy);font-weight:700;margin-bottom:7px;letter-spacing:.5px;">NEXT STOP</div>
     <div class="nextcard">
       <div class="loc"><i class="ti ${ico}" style="color:${col}"></i>${esc(next.location||next.activity)}</div>
@@ -1323,7 +1358,8 @@ function renderTrip(){
   if(curDay==null)curDay=days[0];
   $("#dayTabs").innerHTML=days.map(d=>{
     const dt=it.find(r=>String(r.day)===d);
-    return `<button class="daytab ${d===String(curDay)?'on':''}" onclick="setDay('${jsq(d)}')">Day ${esc(d)}<br><span style="font-size:10px;opacity:.8">${esc(dt?dt.date:'')}</span></button>`;
+    const wd=dt?weekdayOf(dt.date):"";
+    return `<button class="daytab ${d===String(curDay)?'on':''}" onclick="setDay('${jsq(d)}')">Day ${esc(d)}<br><span style="font-size:10px;opacity:.8">${esc(wd?wd+" ":"")}${esc(dt?dt.date:'')}</span></button>`;
   }).join("");
   const list=it.filter(r=>String(r.day)===String(curDay));
   const activeDay=(it.find(r=>String(r.status).toLowerCase()!=="done")||{}).day;
@@ -1601,6 +1637,20 @@ function lockKey(d){
   if($("#lockSub").classList.contains("bad"))lockSay("Enter your PIN");
 }
 function lockBack(){LOCK_BUF=LOCK_BUF.slice(0,-1);lockDots();}
+// Sokongan papan kekunci sebenar (desktop) dan papan kekunci telefon.
+// Angka menaip, Backspace padam, Delete/Esc kosongkan, Enter hantar.
+document.addEventListener("keydown",function(e){
+  const el=$("#lockScreen");
+  if(!el||el.classList.contains("hidden"))return;
+  if(!el.classList.contains("open")){
+    if(e.key==="Enter"||/^[0-9]$/.test(e.key)){lockOpen();if(/^[0-9]$/.test(e.key))lockKey(e.key);e.preventDefault();}
+    return;
+  }
+  if(/^[0-9]$/.test(e.key)){lockKey(e.key);e.preventDefault();}
+  else if(e.key==="Backspace"){lockBack();e.preventDefault();}
+  else if(e.key==="Delete"||e.key==="Escape"){lockClear();e.preventDefault();}
+  else if(e.key==="Enter"){lockSubmit();e.preventDefault();}
+});
 function lockClear(){LOCK_BUF="";lockDots();lockSay("Enter your PIN");}
 async function lockSubmit(){
   if(LOCK_BUF.length<4)return;
