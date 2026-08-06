@@ -107,8 +107,38 @@ main{padding:14px 14px 22px;}
   position:relative;overflow:hidden;}
 .nextcard::before{content:'';position:absolute;inset:0 0 auto 0;height:3px;
   background:linear-gradient(90deg,var(--navy2),#12b886);}
-.nextcard .loc{display:flex;align-items:center;gap:10px;font-size:18px;font-weight:700;}
+.nextcard .loc{display:flex;align-items:center;gap:10px;font-size:20px;font-weight:800;line-height:1.25;}
+.nextcard .loc i{flex:0 0 auto;font-size:22px;}
 .nextcard .time{font-size:38px;font-weight:800;margin:10px 0 2px;letter-spacing:-1.5px;line-height:1;}
+/* Dua perhentian sekali pandang: SEKARANG (besar, bergaris hijau) dan
+   SELEPAS INI (lebih kecil, kelabu). Beza saiz & warna yang buat orang tua
+   nampak mana satu sedang berlaku tanpa perlu baca satu-satu. */
+.stop-label{display:flex;align-items:center;gap:7px;font-size:12.5px;font-weight:800;
+  letter-spacing:.6px;margin:0 0 8px;}
+.stop-label.now{color:var(--green);}
+.stop-label.then{color:var(--muted);margin-top:18px;}
+.stop-label .dot{width:9px;height:9px;border-radius:50%;background:var(--green);flex:0 0 auto;
+  box-shadow:0 0 0 0 rgba(18,184,134,.55);animation:nowPulse 2s infinite;}
+@keyframes nowPulse{70%{box-shadow:0 0 0 9px rgba(18,184,134,0);}100%{box-shadow:0 0 0 0 rgba(18,184,134,0);}}
+.upnext{background:var(--soft);border:1px solid var(--line);border-radius:15px;padding:14px 15px;}
+.upnext.done{display:flex;align-items:center;gap:10px;color:var(--muted);font-size:14px;}
+.upnext.done i{font-size:20px;color:var(--green);flex:0 0 auto;}
+.un-head{display:flex;align-items:baseline;gap:9px;}
+.un-head i{font-size:19px;flex:0 0 auto;position:relative;top:2px;}
+.un-loc{font-size:16.5px;font-weight:700;flex:1;min-width:0;line-height:1.3;}
+.un-time{font-size:19px;font-weight:800;letter-spacing:-.5px;flex:0 0 auto;color:var(--navy2);}
+.un-act{font-size:14px;color:var(--muted);margin-top:4px;line-height:1.4;}
+/* popup selepas Mark done */
+.moved-done{display:flex;align-items:center;gap:11px;background:var(--greenbg);color:var(--green);
+  border-radius:13px;padding:13px 15px;font-size:16px;}
+.moved-done i{font-size:26px;flex:0 0 auto;}
+.moved-done .ms{font-size:12.5px;font-weight:600;opacity:.85;}
+.moved-label{font-size:12px;font-weight:800;letter-spacing:.6px;color:var(--navy);margin:16px 0 8px;}
+.moved-next{background:var(--soft);border:1px solid var(--line);border-radius:14px;padding:15px;}
+.mn-loc{display:flex;align-items:center;gap:9px;font-size:18px;font-weight:800;line-height:1.3;}
+.mn-loc i{font-size:21px;flex:0 0 auto;}
+.mn-time{font-size:30px;font-weight:800;letter-spacing:-1px;margin:8px 0 2px;line-height:1;}
+.mn-act{font-size:14.5px;color:var(--muted);line-height:1.45;}
 .pill{display:inline-block;font-size:12px;padding:4px 12px;border-radius:20px;font-weight:600;}
 .pill.warn{background:var(--amberbg);color:var(--amber);}
 .pill.urgent{background:var(--redbg);color:var(--red);}
@@ -160,6 +190,11 @@ main{padding:14px 14px 22px;}
 .tl-loc{font-size:12px;color:var(--muted);}
 .transit{display:inline-flex;align-items:center;gap:6px;background:var(--accent-soft);color:var(--navy);
   font-size:11px;padding:4px 10px;border-radius:8px;margin-top:6px;font-weight:600;}
+/* Maklumat kereta api = benda paling kritikal untuk dibaca berdiri di platform.
+   Versi besar: bungkus penuh, tak dipotong, saiz boleh dibaca tanpa cermin mata. */
+.transit.big{display:flex;font-size:14px;line-height:1.45;padding:9px 12px;margin-top:9px;
+  border-radius:10px;align-items:flex-start;white-space:normal;}
+.transit.big i{font-size:17px;flex:0 0 auto;margin-top:1px;}
 .tl-notes{font-size:11px;color:var(--hint);margin-top:5px;font-style:italic;}
 .tl-price{display:inline-block;font-size:12px;font-weight:700;color:var(--ink);margin-top:4px;}
 .tl-actions{display:flex;gap:7px;margin-top:9px;}
@@ -718,14 +753,18 @@ async function apiPost(payload,pinOverride,timeoutMs){
                          :"Offline — the change was not sent. Please try again when connected."};
   }
 }
+// Pulangkan true kalau server terima — pemanggil (markDone) perlu tahu, supaya
+// popup "next stop" tak keluar kalau simpanan sebenarnya gagal.
 async function setStatus(tab,id,status){
-  if(!ADMIN){toast("Admin only");return;}
+  if(!ADMIN){toast("Admin only");return false;}
   const j=await apiPost({action:"setStatus",tab:tab,id:id,status:status});
   if(j.ok){ // update local
     const d=DATA[tab];const h=d[0];const idc=h.indexOf("id"),stc=h.indexOf("status");
     for(let i=1;i<d.length;i++){if(String(d[i][idc])===String(id)){d[i][stc]=status;break;}}
-    saveCache();renderAll();toast("Updated");
-  }else{toast(j.error||"Failed");if(/PIN/.test(j.error||"")){ADMIN=false;$("#adminBtn").classList.remove("on");$("#adminLbl").textContent="Admin";}}
+    saveCache();renderAll();
+    return true;
+  }else{toast(j.error||"Failed");if(/PIN/.test(j.error||"")){ADMIN=false;$("#adminBtn").classList.remove("on");$("#adminLbl").textContent="Admin";}
+    return false;}
 }
 async function updateRow(tab,rowNum,values){
   const j=await apiPost({action:"update",tab:tab,row:rowNum,values:values});
@@ -935,12 +974,17 @@ function dayPace(day){
   return res;
 }
 
+// Baki perhentian yang belum ditanda selesai, ikut susunan Sheet.
+// [0] = tempat kita SEKARANG, [1] = tempat SETERUSNYA.
+function pendingStops(){
+  return rows("Itinerary").filter(r=>String(r.status).toLowerCase()!=="done");
+}
 function renderToday(){
   const it=rows("Itinerary");
   if(!it.length){$("#todayBody").innerHTML='<div class="empty">No itinerary yet.</div>';return;}
-  // next stop = first non-done row
-  let todays=it.filter(r=>String(r.status).toLowerCase()!=="done");
-  let next=todays[0]||it[0];
+  const todays=pendingStops();
+  const next=todays[0]||it[it.length-1];      // sekarang
+  const after=todays[1]||null;                // selepas ini
   const ico=TYPE_ICON[next.type]||"ti-map-pin",col=TYPE_COLOR[next.type]||"#185FA5";
   const nmode=stopMode(next),nmeta=MODE_META[nmode];
   const dayNum=next.day;
@@ -951,10 +995,10 @@ function renderToday(){
   });
   if(!remHtml)remHtml='<div class="rem-item soft"><i class="ti ti-info-circle"></i><span>No urgent items right now</span></div>';
 
-  const transit=next.transit_info?`<div class="transit"><i class="ti ti-arrow-guide"></i>${esc(next.transit_info)}</div>`:"";
   const notes=next.notes?`<div class="tl-notes">${esc(next.notes)}</div>`:"";
-  const doneBtn=ADMIN?`<button class="bigbtn" onclick="markDone('${jsq(next.id)}')"><i class="ti ti-check"></i>Mark done · next stop</button>`:"";
+  const doneBtn=ADMIN?`<button class="bigbtn" onclick="markDone('${jsq(next.id)}')"><i class="ti ti-check"></i>Done here · go to next</button>`:"";
   const pill=pacePill(next);
+  const upnext=upNextCard(after);
 
   const jn=jstNow(),mn=mytNow();
   const meNow=meGet()||WHO_NAME;
@@ -985,13 +1029,13 @@ function renderToday(){
     ${clocks}
     ${paceToggle()}
     <div class="eyebrow">Day ${esc(next.day)} · ${esc(weekdayOf(next.date,true))} ${esc(next.date)}</div>
-    <div style="font-size:12px;color:var(--navy);font-weight:700;margin-bottom:7px;letter-spacing:.5px;">NEXT STOP</div>
+    <div class="stop-label now"><span class="dot"></span>YOU ARE HERE NOW</div>
     <div class="nextcard">
       <div class="loc"><i class="ti ${ico}" style="color:${col}"></i>${esc(next.location||next.activity)}</div>
       ${pill?`<div style="margin:9px 0 -2px">${pill}</div>`:""}
       <div class="time">${esc(next.time)||"—"}</div>
-      <div style="font-size:14px;color:var(--muted);margin-bottom:2px;">${esc(next.activity)}</div>
-      ${transit}${notes}
+      <div style="font-size:15.5px;color:var(--muted);margin-bottom:2px;line-height:1.4;">${esc(next.activity)}</div>
+      ${next.transit_info?`<div class="transit big"><i class="ti ti-arrow-guide"></i>${esc(next.transit_info)}</div>`:""}${notes}
       <div class="qbtns">
         <button class="qbtn" onclick="openLink('${mapsDirMode(next.lat,next.lng,next.location,nmode)}')"><i class="ti ${nmeta.icon}" style="color:var(--navy2)"></i><div>${nmeta.label}</div></button>
         <button class="qbtn" onclick="openLink('${mapsSearch("halal food near "+(next.location||""))}')"><i class="ti ti-tools-kitchen-2" style="color:#c0562f"></i><div>Halal</div></button>
@@ -1000,12 +1044,76 @@ function renderToday(){
       ${nmode==="drive"?`<button class="bigbtn grey" style="margin-top:10px" onclick="openLink('${parkingNear(next.location,next.lat,next.lng)}')"><i class="ti ti-parking"></i>Nearby parking</button>`:""}
       ${doneBtn}
     </div>
+    ${upnext}
     ${paceBlock(next)}
     <div class="sect-label">Urgent today</div>
     ${remHtml}
   `;
 }
-function markDone(id){setStatus("Itinerary",id,"done");}
+// Kad kedua: tempat SELEPAS ini. Sengaja lebih kecil daripada kad "sekarang"
+// supaya tak keliru mana satu yang sedang berlaku — tapi masih besar cukup
+// untuk dibaca orang tua, dan maklumat kereta api tetap dipapar penuh di sini
+// (itu yang orang perlu tahu SEBELUM bergerak).
+function upNextCard(r){
+  if(!r)return `<div class="stop-label then">THEN</div>
+    <div class="upnext done"><i class="ti ti-flag-check"></i><div>That is the last stop on the list. Nothing after this.</div></div>`;
+  const ico=TYPE_ICON[r.type]||"ti-map-pin",col=TYPE_COLOR[r.type]||"#185FA5";
+  const tr=r.transit_info?`<div class="transit big"><i class="ti ti-arrow-guide"></i>${esc(r.transit_info)}</div>`:"";
+  return `<div class="stop-label then">THEN — NEXT STOP</div>
+    <div class="upnext">
+      <div class="un-head">
+        <i class="ti ${ico}" style="color:${col}"></i>
+        <div class="un-loc">${esc(r.location||r.activity)}</div>
+        <div class="un-time">${esc(r.time)||"—"}</div>
+      </div>
+      <div class="un-act">${esc(r.activity)}</div>
+      ${tr}
+    </div>`;
+}
+// Tanda selesai, kemudian beritahu dengan jelas apa yang seterusnya.
+// Boleh UNDO — sebab tersalah tekan atas telefon memang biasa berlaku.
+async function markDone(id){
+  const before=pendingStops();
+  const cur=before.find(r=>String(r.id)===String(id))||before[0];
+  const btn=document.querySelector(".nextcard .bigbtn");
+  if(btn){btn.disabled=true;btn.innerHTML='<i class="ti ti-loader-2"></i>Saving…';}
+  const ok=await setStatus("Itinerary",id,"done");
+  if(!ok){
+    if(btn){btn.disabled=false;btn.innerHTML='<i class="ti ti-check"></i>Done here · go to next';}
+    return;
+  }
+  const after=pendingStops()[0]||null;
+  showMovedOn(cur,after,id);
+}
+function showMovedOn(doneRow,nowRow,undoId){
+  const nm=doneRow?(doneRow.location||doneRow.activity||"that stop"):"that stop";
+  let body=`<div class="moved-done"><i class="ti ti-circle-check"></i><div><b>${esc(nm)}</b><div class="ms">marked done</div></div></div>`;
+  if(nowRow){
+    const ico=TYPE_ICON[nowRow.type]||"ti-map-pin",col=TYPE_COLOR[nowRow.type]||"#185FA5";
+    const md=stopMode(nowRow),meta=MODE_META[md];
+    body+=`<div class="moved-label">NOW HEADING TO</div>
+      <div class="moved-next">
+        <div class="mn-loc"><i class="ti ${ico}" style="color:${col}"></i>${esc(nowRow.location||nowRow.activity)}</div>
+        <div class="mn-time">${esc(nowRow.time)||"—"}</div>
+        <div class="mn-act">${esc(nowRow.activity)}</div>
+        ${nowRow.transit_info?`<div class="transit big"><i class="ti ti-arrow-guide"></i>${esc(nowRow.transit_info)}</div>`:""}
+      </div>
+      <button class="bigbtn" style="margin-top:14px" onclick="closeModal();openLink('${mapsDirMode(nowRow.lat,nowRow.lng,nowRow.location,md)}')"><i class="ti ${meta.icon}"></i>${meta.label} to here</button>`;
+  }else{
+    body+=`<div class="moved-label">ALL DONE</div>
+      <div class="moved-next"><div class="mn-act">No stops left on the list.</div></div>`;
+  }
+  body+=`<div class="modal-row" style="margin-top:12px">
+      <button class="mbtn ghost" onclick="undoDone('${jsq(undoId)}')"><i class="ti ti-arrow-back-up"></i> Undo</button>
+      <button class="mbtn primary" onclick="closeModal()">Got it</button>
+    </div>`;
+  modalScroll("Moved on",body);
+}
+async function undoDone(id){
+  closeModal();
+  const ok=await setStatus("Itinerary",id,"");
+  if(ok)toast("Undone — back to that stop");
+}
 // Isi "Next prayer" pada kad Today. Dipanggil selepas render supaya skrin
 // tak tertunggu rangkaian; kalau gagal, kad kekal "—" dan tiada apa rosak.
 async function fillNextPrayer(){
