@@ -117,6 +117,8 @@ main{padding:14px 14px 22px;}
   letter-spacing:.6px;margin:0 0 8px;}
 .stop-label.now{color:var(--green);}
 .stop-label.then{color:var(--muted);margin-top:18px;}
+.stop-label.soon{color:var(--navy2);}
+.stop-label.soon i{font-size:15px;}
 .stop-label .dot{width:9px;height:9px;border-radius:50%;background:var(--green);flex:0 0 auto;
   box-shadow:0 0 0 0 rgba(18,184,134,.55);animation:nowPulse 2s infinite;}
 @keyframes nowPulse{70%{box-shadow:0 0 0 9px rgba(18,184,134,0);}100%{box-shadow:0 0 0 0 rgba(18,184,134,0);}}
@@ -868,6 +870,18 @@ function tripWindow(){
   }
   return {d1:8,d2:15,mo:10,yr:2026};
 }
+// Berapa hari lagi sebelum hari pertama trip (negatif kalau dah lepas).
+function daysToTrip(){
+  const w=tripWindow(),n=jstNow();
+  return Math.round((Date.UTC(w.yr,w.mo,w.d1)-Date.UTC(n.y,n.mo,n.d))/86400000);
+}
+function countdownLine(){
+  const d=daysToTrip();
+  if(d>1)return d+" days to go";
+  if(d===1)return "Tomorrow";
+  if(d===0)return "Today";
+  return "Trip window";
+}
 function tripActive(){
   const d=jstNow(),w=tripWindow();
   const inWin=(d.y===w.yr&&d.mo===w.mo&&d.d>=w.d1&&d.d<=w.d2);
@@ -999,6 +1013,10 @@ function renderToday(){
   const todays=pendingStops();
   const next=todays[0]||it[it.length-1];      // sekarang
   const after=todays[1]||null;                // selepas ini
+  // Sebelum trip bermula, perhentian pertama BUKAN "anda di sini sekarang" dan
+  // senarai penting itu BUKAN "urgent today" — ia hari pertama trip, mungkin
+  // berbulan lagi. Label yang salah ini buat orang ingat ada benda nak buat hari ni.
+  const preTrip=!tripActive();
   const ico=TYPE_ICON[next.type]||"ti-map-pin",col=TYPE_COLOR[next.type]||"#185FA5";
   const nmode=stopMode(next),nmeta=MODE_META[nmode];
   const dayNum=next.day;
@@ -1042,8 +1060,10 @@ function renderToday(){
     ${hi}
     ${clocks}
     ${paceToggle()}
-    <div class="eyebrow">Day ${esc(next.day)} · ${esc(weekdayOf(next.date,true))} ${esc(next.date)}</div>
-    <div class="stop-label now"><span class="dot"></span>YOU ARE HERE NOW</div>
+    <div class="eyebrow">${preTrip?esc(countdownLine())+" · ":""}Day ${esc(next.day)} · ${esc(weekdayOf(next.date,true))} ${esc(next.date)}</div>
+    ${preTrip
+      ?`<div class="stop-label soon"><i class="ti ti-plane-departure"></i>FIRST STOP OF THE TRIP</div>`
+      :`<div class="stop-label now"><span class="dot"></span>YOU ARE HERE NOW</div>`}
     <div class="nextcard">
       <div class="loc"><i class="ti ${ico}" style="color:${col}"></i>${esc(next.location||next.activity)}</div>
       ${pill?`<div style="margin:9px 0 -2px">${pill}</div>`:""}
@@ -1060,7 +1080,7 @@ function renderToday(){
     </div>
     ${upnext}
     ${paceBlock(next)}
-    <div class="sect-label">Urgent today</div>
+    <div class="sect-label">${preTrip?"Urgent on day "+esc(next.day)+" — not today":"Urgent today"}</div>
     ${remHtml}
   `;
 }
