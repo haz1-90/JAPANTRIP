@@ -2075,9 +2075,16 @@ async function lockSubmit(){
     NETFAIL_SEEN=true;lockViewToggle();
     const local=await verifCheck(pin);
     if(local)j={ok:true,name:local.name,admin:local.admin,offline:true};
-    else j={ok:false,error:verifGet().length
-      ? "No internet — PIN not recognised on this phone"
-      : "No internet — sign in once with a connection first"};
+    else{
+      // Katakan terus siapa yang BOLEH masuk tanpa talian di telefon ni.
+      // Mesej lama ("PIN not recognised") nampak macam PIN itu salah,
+      // sedangkan PIN mungkin betul — cuma server tak dapat dihubungi.
+      const known=verifGet().map(v=>v.name).filter(Boolean);
+      j={ok:false,error:known.length
+        ? "Can't reach the server. Without internet only "+known.join(" / ")+
+          " can sign in on this phone — connect to sign in as someone else."
+        : "Can't reach the server. Sign in once with internet first."};
+    }
   }
   if(j.ok){
     if(!j.offline)await verifSave(j.name,pin,j.admin);
