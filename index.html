@@ -842,6 +842,20 @@ function jstNow(){return tzNow('Asia/Tokyo',9);}
 function mytNow(){return tzNow('Asia/Kuala_Lumpur',8);}
 function hhmm(n){return String(n.h).padStart(2,"0")+":"+String(n.mi).padStart(2,"0");}
 function nowMin(){const n=jstNow();return n.h*60+n.mi;}
+// Hari 1 bermula di KLIA2 (waktu Malaysia) tetapi berakhir di Haneda (waktu
+// Jepun). Kalau dua-dua dibaca sebagai nombor mentah, jurang KUL 2:50 PM ->
+// HND 10:40 PM jadi 7j50m sedangkan penerbangan sebenarnya 6j50m.
+// Jadi SEMUA kiraan dalaman ditukar ke JST; teks yang dipapar kekal seperti
+// ditulis dalam Sheet ("2:50 PM MYT").
+const MY_ROW=/\bMYT\b|KLIA|Kuala Lumpur|\bKUL\b|Sepang/i;
+function isMyRow(r){return MY_ROW.test(String((r&&r.time)||"")+" "+String((r&&r.location)||""));}
+// Minit-dalam-hari untuk satu baris, sentiasa dalam JST.
+function rowMin(r){
+  const t=parseTimeToMin(r&&r.time);
+  return t==null?null:t+(isMyRow(r)?60:0);
+}
+// "Sekarang" dalam zon baris itu — untuk waktu solat, yang ikut lokasi.
+function nowMinAt(r){const n=isMyRow(r)?mytNow():jstNow();return n.h*60+n.mi;}
 // Trip window is read from Info (key "Dates", e.g. "8-15 November 2026 (7 nights)")
 // so shifting the trip only needs a Sheet edit; falls back to 8-15 Nov 2026.
 function tripWindow(){
@@ -878,15 +892,15 @@ function weekdayOf(dateStr,full){
 function dayList(day){return rows("Itinerary").filter(r=>String(r.day)===String(day));}
 function nextAnchor(list,fromIdx){
   for(let i=fromIdx;i<list.length;i++){
-    const r=list[i],t=parseTimeToMin(r.time);
+    const r=list[i],t=rowMin(r);
     if(String(r.urgent).toUpperCase()==="YES"&&t!=null&&String(r.status).toLowerCase()!=="done")return {r:r,t:t,i:i};
   }
   return null;
 }
 function pacePill(next){
   if(!ADMIN||!tripActive())return "";
-  const s=parseTimeToMin(next.time);if(s==null)return "";
-  const diff=nowMin()-s; // + = behind
+  const s=rowMin(next);if(s==null)return "";
+  const diff=nowMin()-s; // + = behind (dua-dua dalam JST)
   if(Math.abs(diff)<=5)return '<span class="pill ok">On schedule</span>';
   if(diff>5)return '<span class="pill late">Behind '+fmtDur(diff)+'</span>';
   return '<span class="pill early">Ahead '+fmtDur(-diff)+'</span>';
@@ -933,7 +947,7 @@ function paceBlock(next){
     });
   }else{
     flex.forEach(r=>{
-      const t=parseTimeToMin(r.time);
+      const t=rowMin(r);
       html+=`<div class="pacerow"><span class="pl">${esc(r.activity)}</span><span class="pr">${t!=null?esc(r.time):"flexible"}</span></div>`;
     });
   }
@@ -949,20 +963,20 @@ function dayPace(day){
   while(i<list.length){
     const r=list[i];
     const done=String(r.status).toLowerCase()==="done";
-    const t=parseTimeToMin(r.time);
+    const t=rowMin(r);
     const isAnchor=String(r.urgent).toUpperCase()==="YES"&&t!=null&&!done;
     if(done){res[r.id]={done:true};i++;continue;}
     if(isAnchor){cursor=Math.max(cursor,t);res[r.id]={anchor:true,t:t};i++;continue;}
     // flexible segment: gather until the next fixed point
     let j=i;const seg=[];
     while(j<list.length){
-      const rj=list[j],dj=String(rj.status).toLowerCase()==="done",tj=parseTimeToMin(rj.time);
+      const rj=list[j],dj=String(rj.status).toLowerCase()==="done",tj=rowMin(rj);
       const aj=String(rj.urgent).toUpperCase()==="YES"&&tj!=null&&!dj;
       if(aj)break;
       if(!dj)seg.push(rj);
       j++;
     }
-    const anchorT=(j<list.length)?parseTimeToMin(list[j].time):null;
+    const anchorT=(j<list.length)?rowMin(list[j]):null;
     if(anchorT!=null&&seg.length){
       const per=Math.max(0,(anchorT-cursor)/seg.length);
       seg.forEach(s=>{res[s.id]={arr:cursor,leave:cursor+per,per:per,tight:per<10};cursor+=per;});
@@ -1122,8 +1136,10 @@ async function fillNextPrayer(){
   const cur=it.find(r=>String(r.status).toLowerCase()!=="done")||it[0]||{};
   if(!cur.lat||!cur.lng){el.textContent="—";return;}
   try{
-    const t=await timingsFor(cur.lat,cur.lng,jstNow());
-    const now=nowMin();
+    // Waktu solat ikut lokasi perhentian semasa — di KLIA2 ia waktu KL,
+    // lepas mendarat ia terus tukar sendiri ke waktu Jepun.
+    const t=await timingsFor(cur.lat,cur.lng,isMyRow(cur)?mytNow():jstNow());
+    const now=nowMinAt(cur);
     const P=[["Subuh",t.Fajr],["Zohor",t.Dhuhr],["Asar",t.Asr],["Maghrib",t.Maghrib],["Isyak",t.Isha]];
     let nx=null;
     for(const p of P){const m=parseTimeToMin(p[1]);if(m!=null&&m>=now){nx=[p[0],p[1],m];break;}}
@@ -1431,6 +1447,30 @@ async function rosterRemove(item){
 }
 
 // ====== FLIGHTS ======
+// Masa berlepas dibaca dari baris Info "Outbound" (cth "D7 522 · KUL 14:50 ->
+// HND 22:40") — tukar penerbangan dalam Sheet, semua cut-off di bawah ikut
+// sendiri. Tiada masa ditulis mati dalam kod.
+function depTimeMin(){
+  const r=rows("Info").find(x=>/^flight$/i.test(String(x.category).trim())
+                              &&/^outbound$/i.test(String(x.key).trim()));
+  const m=String((r&&r.value)||"").match(/KUL\s*(\d{1,2}):(\d{2})/i);
+  return m?(+m[1])*60+(+m[2]):null;
+}
+// Cut-off KLIA2 yang orang paling kerap terlepas pandang: kaunter tutup 60
+// minit dan pintu tutup 20 minit sebelum berlepas (dasar AirAsia antarabangsa).
+function klia2Block(){
+  const dep=depTimeMin();
+  if(dep==null)return "";
+  return `<div class="sect-label">Departure day — KLIA2</div>
+    <div class="card" style="margin-bottom:9px">
+      <div class="irow"><span class="k">Where</span><span class="v">KLIA2 · Level 3 Departure Hall</span></div>
+      <div class="irow"><span class="k">Be there</span><span class="v">${fmtMin(dep-180)} · 3 h before</span></div>
+      <div class="irow"><span class="k">Bag drop closes</span><span class="v">${fmtMin(dep-60)} · 60 min before</span></div>
+      <div class="irow"><span class="k">Gate closes</span><span class="v">${fmtMin(dep-20)} · 20 min before</span></div>
+      <div class="irow"><span class="k">Departs</span><span class="v">${fmtMin(dep)} Malaysia time</span></div>
+      <div class="binfo" style="margin-top:8px">All times Malaysia (MYT). Japan is 1 hour ahead. The gate number is only on the boarding pass — check the KLIA2 screens.</div>
+    </div>`;
+}
 // Semua data dari tab Info, category = "Flight". Tambah baris baru dalam Sheet
 // (atau butang Admin bawah) untuk seat, bagasi, dsb — terus keluar di sini.
 function showFlights(){
@@ -1452,9 +1492,11 @@ function showFlights(){
       </div>`;
     });
   }
+  html+=klia2Block();
   html+=`<div class="sect-label">Check-in &amp; status</div>
     <div class="link-row" onclick="openLink('https://www.airasia.com/')"><i class="ti ti-plane-departure" style="color:var(--red)"></i><span>AirAsia — manage booking / check-in<br><span style="font-weight:400;color:var(--hint);font-size:11px">D7 522 outbound · opens 14 days before</span></span><i class="ti ti-external-link" style="color:var(--hint)"></i></div>
     <div class="link-row" onclick="openLink('https://www.batikair.com/')"><i class="ti ti-plane-arrival" style="color:var(--navy2)"></i><span>Batik Air — manage booking / check-in<br><span style="font-weight:400;color:var(--hint);font-size:11px">OD873 return · Narita Terminal 2</span></span><i class="ti ti-external-link" style="color:var(--hint)"></i></div>
+    <div class="link-row" onclick="openLink('${mapsSearch("KLIA2 Departure Hall Level 3")}')"><i class="ti ti-map-pin" style="color:#7a72d6"></i><span>KLIA2 — departures</span><i class="ti ti-external-link" style="color:var(--hint)"></i></div>
     <div class="link-row" onclick="openLink('${mapsSearch("Haneda Airport Terminal 3 arrivals")}')"><i class="ti ti-map-pin" style="color:#7a72d6"></i><span>Haneda T3 — arrivals</span><i class="ti ti-external-link" style="color:var(--hint)"></i></div>
     <div class="link-row" onclick="openLink('${mapsSearch("Narita Airport Terminal 2 departures")}')"><i class="ti ti-map-pin" style="color:#7a72d6"></i><span>Narita T2 — departures</span><i class="ti ti-external-link" style="color:var(--hint)"></i></div>`;
   if(ADMIN){
