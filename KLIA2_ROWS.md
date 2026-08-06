@@ -9,7 +9,24 @@ Semua masa di bawah dikira dari penerbangan sedia ada dalam tab `Info`:
 
 ---
 
-## Cara paste (2 minit)
+## Cara paling malas — biar skrip buat (1 minit)
+
+Guna fail **`ONE_TIME_KLIA2.gs`** dalam repo ini:
+
+1. Apps Script editor → tekan **+** sebelah "Files" → **Script** → nama `onetime`
+2. Padam isi fail baru tu → paste semua isi `ONE_TIME_KLIA2.gs` → 💾 Save
+3. Dropdown fungsi atas → pilih **`addKLIA2`** → **▶ Run**
+4. Execution log patut baca: `SIAP — 4 baris dimasukkan di baris 2...`
+5. Buka app → **Refresh** → padam fail `onetime.gs`. Habis.
+
+Selamat ditekan Run dua kali — kalau baris dah wujud dia berhenti sendiri,
+tiada baris berganda. Menyesal? Run **`removeKLIA2`**, Sheet balik macam asal.
+
+Tak perlu deploy semula. Fail ni tak sentuh `Code.gs` langsung.
+
+---
+
+## Cara manual (kalau tak nak guna skrip)
 
 1. Buka Sheet → tab **Itinerary**.
 2. Cari baris `D1-01` (Arrival Haneda). Klik kanan nombor barisnya →
