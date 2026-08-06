@@ -283,8 +283,6 @@ nav{position:fixed;bottom:0;left:0;right:0;max-width:520px;margin:0 auto;
 .adj.fixed{background:var(--greenbg);color:var(--green);}
 .link-row .rv{font-weight:800;color:var(--navy2);font-size:15px;}
 
-.greet{font-size:20px;font-weight:800;letter-spacing:-.4px;margin:0 0 10px;}
-
 /* lock screen — gambar penuh, kandungan di tepi atas & bawah supaya Fuji nampak */
 .lock{position:fixed;inset:0;z-index:500;background:#0b1b30;overflow:hidden;
   display:flex;flex-direction:column;justify-content:space-between;
@@ -358,6 +356,14 @@ nav{position:fixed;bottom:0;left:0;right:0;max-width:520px;margin:0 auto;
 }
 
 .greet{font-size:20px;font-weight:800;letter-spacing:-.4px;margin:0 0 10px;}
+.greet-row{display:flex;align-items:center;justify-content:space-between;gap:10px;}
+.greet-row .greet{margin-bottom:10px;}
+.lockbtn{display:inline-flex;align-items:center;gap:5px;margin-bottom:10px;flex:0 0 auto;
+  background:var(--card);border:1px solid var(--line);color:var(--navy2);
+  font-size:12px;font-weight:700;padding:6px 11px;border-radius:999px;cursor:pointer;
+  box-shadow:var(--shadow);transition:transform .12s ease;}
+.lockbtn:active{transform:scale(.94);}
+.lockbtn i{font-size:14px;}
 
 
 /* kad ringkas Today */
@@ -935,9 +941,13 @@ function renderToday(){
   const pill=pacePill(next);
 
   const jn=jstNow(),mn=mytNow();
-  const meNow=meGet();
-  const hi=meNow?`<div class="greet">Hi ${esc(meNow)} <span style="font-weight:400">\u{1F44B}</span></div>`
-                :`<div class="greet" style="cursor:pointer" onclick="showLock()">Hi there <span style="font-size:12px;color:var(--navy2);font-weight:600">\u00b7 sign in</span></div>`;
+  const meNow=meGet()||WHO_NAME;
+  // Butang kunci sentiasa ada bila dah masuk \u2014 supaya boleh tukar orang tanpa
+  // kena bukak incognito atau clear browser data.
+  const hi=meNow
+    ?`<div class="greet-row"><div class="greet">Hi ${esc(meNow)} <span style="font-weight:400">\u{1F44B}</span></div>
+        <button class="lockbtn" onclick="lockNow()" aria-label="Lock and switch user"><i class="ti ti-lock"></i>Lock</button></div>`
+    :`<div class="greet" style="cursor:pointer" onclick="showLock()">Hi there <span style="font-size:12px;color:var(--navy2);font-weight:600">\u00b7 sign in</span></div>`;
   const clocks=`<div class="clocks">
       <div class="clk"><div class="cl">Japan · JST</div><div class="ct">${hhmm(jn)}</div></div>
       <div class="clk"><div class="cl">Malaysia · MYT</div><div class="ct">${hhmm(mn)}</div></div>
@@ -1551,6 +1561,9 @@ function modalScroll(title,body){
 // A settlement is just an expense row: category "Settlement", payer = pengirim,
 // split 100% to penerima — append-only history for free.
 const ME_KEY="knm_me", EXPPIN_KEY="knm_exp_pin", MEPIN_KEY="knm_me_pin", WELCOME_KEY="knm_welcomed";
+// Nama sesi ini sahaja (admin tak simpan nama dalam localStorage) — supaya
+// sapaan tetap "Hi Admin" dan butang Lock tetap nampak.
+let WHO_NAME="";
 const CATS=[["Transport","🚆"],["Accommodation","🏨"],["Food","🍜"],["Activities","🎫"],["Shopping","🛍️"],["Other","💠"]];
 const CAT_ICON=Object.fromEntries(CATS);CAT_ICON["Settlement"]="🤝";
 // keep the earlier Malay labels mapped so rows written before the rename still show an icon
@@ -1586,8 +1599,31 @@ async function meVerify(n){
   else{const e1=$("#meErr");if(e1){e1.classList.remove("hidden");e1.textContent=j.error||"Name or PIN does not match";}}
 }
 function mePin(){try{return localStorage.getItem(MEPIN_KEY)||"";}catch(e){return "";}}
-function meSignOut(){try{localStorage.removeItem(ME_KEY);localStorage.removeItem(MEPIN_KEY);localStorage.removeItem(WELCOME_KEY);}catch(e){}
-  closeModal();renderAll();showLock();toast("Signed out");}
+function meSignOut(){closeModal();lockNow();}
+// Kunci semula terus — buang identiti DAN mod admin, balik ke skrin PIN.
+// Ini yang benarkan tukar orang atas telefon yang sama (dulu kena incognito).
+function lockNow(){
+  try{localStorage.removeItem(ME_KEY);localStorage.removeItem(MEPIN_KEY);localStorage.removeItem(WELCOME_KEY);}catch(e){}
+  WHO_NAME="";
+  adminOff();
+  closeModal();renderAll();showLock();
+}
+function adminOff(){
+  if(!ADMIN)return;
+  ADMIN=false;ADMIN_PIN="";
+  const b=$("#adminBtn"),l=$("#adminLbl");
+  if(b)b.classList.remove("on");
+  if(l)l.textContent="Admin";
+}
+// Mod admin tamat sendiri selepas 30 minit tak disentuh. Identiti biasa TIDAK
+// tamat — app ini untuk orang berusia, tak elok paksa taip PIN tiap kali buka.
+const ADMIN_IDLE_MS=30*60*1000;
+let LAST_TOUCH=Date.now();
+["pointerdown","keydown","visibilitychange"].forEach(ev=>
+  document.addEventListener(ev,()=>{if(!document.hidden)LAST_TOUCH=Date.now();},{passive:true}));
+setInterval(()=>{
+  if(ADMIN&&Date.now()-LAST_TOUCH>ADMIN_IDLE_MS){adminOff();renderAll();toast("Admin mode timed out");}
+},60*1000);
 function memberList(){return rows("Members").map(r=>String(r.name||"").trim()).filter(Boolean);}
 
 // ---- Skrin kunci: PIN sahaja, server yang kenal siapa ----
@@ -1662,6 +1698,7 @@ async function lockSubmit(){
   const j=await apiPost({action:"signIn",pin:pin},pin);
   if(j.ok){
     try{localStorage.setItem(MEPIN_KEY,pin);localStorage.setItem(WELCOME_KEY,"1");}catch(e){}
+    WHO_NAME=j.name||"";LAST_TOUCH=Date.now();
     if(j.admin){ADMIN=true;ADMIN_PIN=pin;$("#adminBtn").classList.add("on");$("#adminLbl").textContent="Editing";}
     else meStore(j.name);
     LOCK_BUF="";lockDots();hideLock();renderAll();toast("Hi "+j.name+"!");
