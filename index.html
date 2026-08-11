@@ -671,7 +671,7 @@ nav{position:fixed;bottom:0;left:0;right:0;max-width:520px;margin:0 auto;
   <rect x="292" y="644" width="40" height="2" rx="1"/>
  </g>
 </svg>
-  <img class="fuji-photo" src="fuji.jpg" alt="" onerror="this.remove()">
+  <img class="fuji-photo" data-src="fuji.jpg" alt="" onerror="this.remove()">
   <div class="lock-veil"></div>
 
   <div class="lock-top">
@@ -721,6 +721,11 @@ try{
   if(!localStorage.getItem("knm_me")){
     var _ls=document.getElementById("lockScreen");
     if(_ls){_ls.classList.remove("hidden");document.body.style.overflow="hidden";}
+    // Muat gambar Fuji HANYA bila skrin kunci benar-benar dipapar. Dulu ia
+    // dimuat turun pada setiap bukaan walaupun sudah log masuk — 80KB terbuang
+    // setiap kali, dan pada wifi hotel yang perlahan itu terasa.
+    var _im=document.querySelector(".fuji-photo");
+    if(_im&&_im.dataset.src&&!_im.src)_im.src=_im.dataset.src;
   }
 }catch(e){}
 </script>
@@ -2312,6 +2317,8 @@ function viewOnly(){
 function showLock(){
   LOCK_BUF="";LOCK_FAILS=0;
   const el=$("#lockScreen");if(!el)return;
+  const im=el.querySelector(".fuji-photo");
+  if(im&&im.dataset.src&&!im.getAttribute("src"))im.src=im.dataset.src;
   el.classList.remove("hidden");el.classList.remove("open");
   document.body.style.overflow="hidden";
   lockDots();lockSay("Enter your PIN");lockViewToggle();
