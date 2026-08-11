@@ -866,6 +866,28 @@ async function submitPin(){
 function closeModal(){$("#modalMount").innerHTML="";}
 
 // ====== WRITE (via Apps Script) ======
+// Code.gs melapor ralat dalam Bahasa Melayu; app dipersembahkan sepenuhnya
+// dalam English formal. Terjemah di SATU tempat ini — semua POST lalu sini —
+// supaya tak perlu tampal semula Code.gs dan deploy semula.
+const ERR_EN=[
+  [/^PIN salah$/i,"The PIN is incorrect."],
+  [/^PIN tak dikenali$/i,"This PIN is not recognised."],
+  [/^PIN kosong$/i,"Please enter a PIN."],
+  [/^Nama atau PIN tak sepadan$/i,"The name and PIN do not match."],
+  [/dikongsi lebih sorang/i,"This PIN is shared by more than one person — please ask the admin to change it."],
+  [/^Action tak dikenali/i,"The server is running an outdated Code.gs — please paste the latest version and redeploy."],
+  [/^Tab tak sah$/i,"Invalid tab."],
+  [/tak jumpa$/i,"The required tab was not found in the spreadsheet."],
+  [/^Tiada gambar$/i,"No image was attached."],
+  [/^Format gambar tak sah$/i,"The image format is not supported."],
+  [/^Gambar terlalu besar$/i,"The image is too large."],
+  [/^ADMIN_PIN belum di-set/i,"ADMIN_PIN has not been set in Script Properties."]
+];
+function errEn(e){
+  const t=String(e||"").trim();
+  for(const [re,en] of ERR_EN)if(re.test(t))return en;
+  return t;
+}
 async function apiPost(payload,pinOverride,timeoutMs){
   try{
     payload.pin=pinOverride||ADMIN_PIN;
@@ -874,7 +896,9 @@ async function apiPost(payload,pinOverride,timeoutMs){
     const t=ac?setTimeout(()=>ac.abort(),timeoutMs||20000):null;
     const r=await fetch(API_URL,{method:"POST",body:JSON.stringify(payload),signal:ac?ac.signal:undefined});
     if(t)clearTimeout(t);
-    return await r.json();
+    const j=await r.json();
+    if(j&&j.error)j.error=errEn(j.error);
+    return j;
   }catch(e){
     const aborted=e&&e.name==="AbortError";
     // netfail = server tak dapat dihubungi (bukan PIN salah). Skrin kunci guna
@@ -3026,8 +3050,8 @@ function findById(tab,id){return rows(tab).find(r=>String(r.id)===String(id));}
 function editItin(id){const r=findById("Itinerary",id);if(!r){toast("Stop not found — please refresh");return;}openEditForm("Itinerary",r._row,r,"Edit stop");}
 function addItin(){const blank={day:curDay,date:(rows("Itinerary").find(x=>String(x.day)===String(curDay))||{}).date||""};openEditForm("Itinerary",null,blank,"Add stop");}
 function editPark(row){const r=findByRow("Parking",row);if(!r){toast("Row not found — please refresh");return;}openEditForm("Parking",row,r,"Edit parking");}
-function editExp(row){const r=findByRow("Expenses",row);if(!r){toast("Row tak jumpa — refresh dulu");return;}openEditForm("Expenses",row,r,"Edit expense");}
-function editStay(row){const r=findByRow("Accommodation",row);if(!r){toast("Row tak jumpa — refresh dulu");return;}openEditForm("Accommodation",row,r,"Edit stay");}
+function editExp(row){const r=findByRow("Expenses",row);if(!r){toast("Row not found — please refresh first");return;}openEditForm("Expenses",row,r,"Edit expense");}
+function editStay(row){const r=findByRow("Accommodation",row);if(!r){toast("Row not found — please refresh first");return;}openEditForm("Accommodation",row,r,"Edit stay");}
 
 function openEditForm(tab,rowNum,data,title){
   const flds=fieldsFor(tab);

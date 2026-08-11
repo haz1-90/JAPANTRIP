@@ -82,35 +82,35 @@ function addKLIA2_() {
   var ROWS = [
     {
       id: 'D1-00A', day: 1, date: '8 Nov', time: '11:50 AM',
-      activity: 'Sampai KLIA2 — kumpul di Level 3, check-in',
+      activity: 'Arrive at KLIA2 — assemble at Level 3, check in',
       location: 'KLIA2', lat: 2.7456, lng: 101.6866,
       type: 'transport', urgent: 'YES', status: '',
       transit_info: 'AirAsia international check-in · Level 3 Departure Hall',
-      notes: 'Sampai 3 jam awal. 5 pax — passport, boarding pass, timbang bagasi'
+      notes: 'Arrive 3 hours early. 5 travellers — passports, boarding passes, baggage to weigh'
     },
     {
       id: 'D1-00B', day: 1, date: '8 Nov', time: '1:50 PM',
-      activity: 'Bag drop TUTUP — kena dah check-in',
+      activity: 'Bag drop CLOSES — check-in must be complete',
       location: 'KLIA2', lat: 2.7456, lng: 101.6866,
       type: 'transport', urgent: 'YES', status: '',
-      transit_info: 'Kaunter tutup 60 minit sebelum berlepas',
-      notes: 'Cut-off keras. Lepas ni bagasi tak boleh masuk'
+      transit_info: 'Counters close 60 minutes before departure',
+      notes: 'Hard cut-off. Baggage cannot be accepted after this time'
     },
     {
       id: 'D1-00C', day: 1, date: '8 Nov', time: '2:00 PM',
-      activity: 'Imigresen & security, terus ke gate',
+      activity: 'Immigration and security, proceed to the gate',
       location: 'KLIA2', lat: 2.7456, lng: 101.6866,
       type: 'transport', urgent: '', status: '',
-      transit_info: 'Nombor gate ada pada boarding pass — tengok skrin KLIA2',
-      notes: 'Ada di gate sebelum 2:20 PM'
+      transit_info: 'The gate number is on the boarding pass — check the KLIA2 screens',
+      notes: 'Be at the gate by 2:20 PM'
     },
     {
       id: 'D1-00D', day: 1, date: '8 Nov', time: '2:50 PM',
-      activity: 'Berlepas KUL — D7 522 ke Haneda (6j 50m)',
+      activity: 'Depart KUL — D7 522 to Haneda (6h 50m)',
       location: 'KLIA2', lat: 2.7456, lng: 101.6866,
       type: 'transport', urgent: 'YES', status: '',
-      transit_info: 'Pintu gate tutup 2:30 PM (20 minit sebelum)',
-      notes: 'Mendarat HND 10:40 PM waktu Jepun. Jepun 1 jam ke depan'
+      transit_info: 'Gate closes at 2:30 PM (20 minutes before departure)',
+      notes: 'Lands at HND 10:40 PM Japan time. Japan is 1 hour ahead'
     }
   ];
 
@@ -198,6 +198,48 @@ function tidyKLIA2Times() {
   SpreadsheetApp.flush();
   Logger.log(n ? ('SIAP — ' + n + ' sel dikemas. Buka app → Refresh.')
                 : 'Tiada apa nak dikemas (semua dah betul).');
+}
+
+/**
+ * SEKALI GUNA — tukar teks 4 baris KLIA2 yang sedia ada kepada English formal.
+ * Run kalau baris dalam Sheet masih Bahasa Melayu (versi awal skrip ini).
+ * Selamat diulang; baris lain tidak disentuh.
+ */
+function englishKLIA2() {
+  var sh = SpreadsheetApp.getActiveSpreadsheet().getSheetByName('Itinerary');
+  if (!sh) { Logger.log('GAGAL: tab "Itinerary" tak jumpa.'); return; }
+  var data = sh.getDataRange().getValues();
+  var head = data[0].map(function (h) { return String(h).trim(); });
+  var idCol = head.indexOf('id');
+  var WANT = {
+    'D1-00A': { activity: 'Arrive at KLIA2 — assemble at Level 3, check in',
+                transit_info: 'AirAsia international check-in · Level 3 Departure Hall',
+                notes: 'Arrive 3 hours early. 5 travellers — passports, boarding passes, baggage to weigh' },
+    'D1-00B': { activity: 'Bag drop CLOSES — check-in must be complete',
+                transit_info: 'Counters close 60 minutes before departure',
+                notes: 'Hard cut-off. Baggage cannot be accepted after this time' },
+    'D1-00C': { activity: 'Immigration and security, proceed to the gate',
+                transit_info: 'The gate number is on the boarding pass — check the KLIA2 screens',
+                notes: 'Be at the gate by 2:20 PM' },
+    'D1-00D': { activity: 'Depart KUL — D7 522 to Haneda (6h 50m)',
+                transit_info: 'Gate closes at 2:30 PM (20 minutes before departure)',
+                notes: 'Lands at HND 10:40 PM Japan time. Japan is 1 hour ahead' }
+  };
+  var n = 0;
+  for (var i = 1; i < data.length; i++) {
+    var want = WANT[String(data[i][idCol]).trim()];
+    if (!want) continue;
+    Object.keys(want).forEach(function (col) {
+      var c = head.indexOf(col);
+      if (c === -1) return;
+      if (String(data[i][c]) === want[col]) return;
+      sh.getRange(i + 1, c + 1).setValue(want[col]);
+      n++;
+    });
+  }
+  SpreadsheetApp.flush();
+  Logger.log(n ? ('SIAP — ' + n + ' sel ditukar ke English. Buka app → Refresh.')
+                : 'Tiada apa nak ditukar (semua dah English).');
 }
 
 /**
