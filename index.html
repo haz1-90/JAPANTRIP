@@ -465,6 +465,11 @@ nav{position:fixed;bottom:0;left:0;right:0;max-width:520px;margin:0 auto;
   border:1px solid #e2e0d9;border-radius:12px;}
 .doc-page.inapp .doc-head h1{font-size:20px;}
 .doc-page.inapp .doc-foot{margin-top:18px;}
+/* baris "kenapa kategori ini" — tekaan mesti kelihatan, bukan senyap */
+.cat-why{display:flex;align-items:flex-start;gap:6px;font-size:12px;line-height:1.45;
+  color:var(--navy);background:var(--accent-soft);border-radius:9px;
+  padding:8px 10px;margin-top:8px;}
+.cat-why i{font-size:14px;flex:0 0 auto;margin-top:1px;}
 .doc-e{width:38px;text-align:right;padding-left:6px !important;}
 .doc-e .mini{padding:3px 7px;display:inline-flex;}
 .daytab.wide{min-width:88px;}
@@ -2418,10 +2423,68 @@ function renderMoney(){
 
 // ---- add expense form ----
 let EF={cur:"JPY",cat:"Food",day:null,split:"equal",imgData:null};
+// ---- Teka kategori belanja ----
+// Bukan pengitemisasian penuh — cuma "ni makan ke, tren ke, beli barang ke".
+// Tiga isyarat, ikut keutamaan: perkataan pada resit → perhentian semasa →
+// waktu makan. SENTIASA dipaparkan sebabnya, supaya orang nampak ia tekaan
+// dan boleh betulkan; tiada kategori ditukar diam-diam.
+const CAT_HINTS=[
+  ["Transport",/駅|新幹線|切符|乗車券|特急券|地下鉄|鉄道|タクシー|バス|高速|駐車|コインパーキング|suica|pasmo|icoca|\bjr\b|shinkansen|taxi|\bbus\b|subway|metro|railway|parking|toll|\bfare\b|\betc\b/i],
+  ["Accommodation",/ホテル|旅館|民宿|宿泊|素泊|hotel|ryokan|hostel|guest\s*house|\binn\b|lodging|homestay/i],
+  ["Activities",/入場|入園|拝観|美術館|博物館|水族館|遊園地|温泉|admission|entrance|museum|aquarium|onsen|theme\s*park|\btour\b|ticket\s*(adult|child)/i],
+  // Konbini diletak dalam Food dengan sengaja — dalam perjalanan, belian di
+  // situ hampir selalu makanan/minuman. Sebab tu Food diuji sebelum Shopping.
+  ["Food",/レストラン|食堂|ラーメン|定食|居酒屋|カフェ|喫茶|珈琲|弁当|飲食|寿司|焼肉|restaurant|cafe|coffee|ramen|sushi|bakery|dining|kitchen|makan|ローソン|ファミリーマート|セブン|コンビニ|lawson|familymart|7-?eleven|family\s*mart/i],
+  ["Shopping",/ドン・?キホーテ|ユニクロ|ドラッグ|薬局|免税|百貨店|donki|don\s*quijote|uniqlo|daiso|pharmacy|duty\s*free|outlet|department\s*store|\bmart\b|\bstore\b/i]
+];
+const STOP_CAT={food:"Food",hotel:"Accommodation",transport:"Transport",flight:"Transport",sightsee:"Activities"};
+function guessCat(text){
+  if(text){
+    for(let i=0;i<CAT_HINTS.length;i++){
+      if(CAT_HINTS[i][1].test(text))return {cat:CAT_HINTS[i][0],why:"from the receipt"};
+    }
+  }
+  // Perhentian semasa hanya bermakna semasa trip berjalan — sebelum tu baris
+  // pertama ialah KLIA2, dan setiap belanja akan tersalah teka "Transport".
+  const cur=tripActive()?pendingStops()[0]:null;
+  if(cur){
+    const c=STOP_CAT[String(cur.type||"").toLowerCase()];
+    if(c)return {cat:c,why:"you are at "+(cur.location||cur.activity)};
+  }
+  const n=(cur&&isMyRow(cur))?mytNow():jstNow();
+  const m=n.h*60+n.mi;
+  if(m>=360&&m<=630) return {cat:"Food",why:"breakfast time · "+hhmm(n)};
+  if(m>=690&&m<=870) return {cat:"Food",why:"lunch time · "+hhmm(n)};
+  if(m>=1080&&m<=1290)return {cat:"Food",why:"dinner time · "+hhmm(n)};
+  return null;
+}
+// Nama tempat perhentian semasa (kosong sebelum trip bermula).
+function here0(){const r=tripActive()?pendingStops()[0]:null;return (r&&r.location)||"";}
+function catWhyLine(){
+  return EF.catWhy
+    ? `<div class="cat-why" id="efCatWhy"><i class="ti ti-wand"></i>Guessed: <b>${esc(EF.cat)}</b> — ${esc(EF.catWhy)}. Tap another if wrong.</div>`
+    : `<div class="cat-why hidden" id="efCatWhy"></div>`;
+}
+function applyGuess(text){
+  const g=guessCat(text);
+  if(!g)return null;
+  if(EF.catTouched)return null;          // orang dah pilih sendiri — jangan ganggu
+  EF.cat=g.cat;EF.catWhy=g.why;
+  document.querySelectorAll(".efcat").forEach(b=>b.classList.toggle("on",b.dataset.c===g.cat));
+  const w=$("#efCatWhy");
+  if(w){w.classList.remove("hidden");
+    w.innerHTML=`<i class="ti ti-wand"></i>Guessed: <b>${esc(g.cat)}</b> — ${esc(g.why)}. Tap another if wrong.`;}
+  return g;
+}
 function openExpenseForm(){
   const names=memberList(),me=meGet();
   const dnow=tripDayNow();
-  EF={cur:"JPY",cat:"Food",day:dnow||1,split:"equal",payer:me||names[0],imgData:null};
+  EF={cur:"JPY",cat:"Food",day:dnow||1,split:"equal",payer:me||names[0],imgData:null,catWhy:"",catTouched:false};
+  const g0=guessCat();
+  if(g0){EF.cat=g0.cat;EF.catWhy=g0.why;}
+  // "Kita tau ni yang mana" — isi tempat semasa sebagai penerangan awal.
+  // Kalau resit boleh dibaca nanti, nama kedai akan ganti ini.
+  const here={location:here0()};
   const it=rows("Itinerary");
   const days=[...new Set(it.map(r=>String(r.day)))].filter(d=>d&&d!=="null");
   const dayChips=days.map(d=>`<button class="daytab efday ${String(EF.day)===d?'on':''}" data-d="${esc(d)}" onclick="efSetDay('${jsq(d)}')">D${esc(d)}</button>`).join("");
@@ -2436,7 +2499,7 @@ function openExpenseForm(){
       <h3>Add expense</h3>
       <div style="overflow-y:auto;margin-bottom:10px">
         <label class="field-label">Description *</label>
-        <input id="efTitle" placeholder="e.g. Dinner at Ichiran">
+        <input id="efTitle" placeholder="e.g. Dinner at Ichiran" value="${esc(here.location||"")}">
         <label class="field-label">Amount *</label>
         <div style="display:flex;gap:8px">
           <input id="efAmt" inputmode="decimal" placeholder="0" style="flex:1" oninput="expRecalc()">
@@ -2448,6 +2511,7 @@ function openExpenseForm(){
         <div class="binfo" id="efConv" style="margin:2px 0 8px"></div>
         <label class="field-label">Category</label>
         <div class="chiprow">${catChips}</div>
+        ${catWhyLine()}
         <label class="field-label">Day</label>
         <div class="chiprow">${dayChips}</div>
         <label class="field-label">Paid by</label>
@@ -2577,8 +2641,15 @@ function scanReceipt(){
     }
     if(p.title){
       const t=$("#efTitle");
-      if(t&&!String(t.value).trim()){t.value=p.title;got.push("description");}
+      // Nama kedai dari resit lebih tepat daripada nama tempat yang kita isi
+      // awal tadi — jadi ia dibenarkan menggantikannya, tetapi bukan apa yang
+      // ditaip sendiri oleh pengguna.
+      if(t&&(!String(t.value).trim()||String(t.value).trim()===String(here0()))){
+        t.value=p.title;got.push("description");
+      }
     }
+    const gc=applyGuess(j.text||"");
+    if(gc)got.push("category "+gc.cat);
     showReceiptState(got.length
       ? '<span style="color:var(--green)">✓ Filled in '+got.join(" and ")+' — please check it is correct.</span>'
       : '<span style="color:var(--amber)">Nothing recognised. Please enter the details manually.</span>');
@@ -2591,7 +2662,11 @@ function imgUrl(u){
   return m?("https://drive.google.com/thumbnail?id="+m[1]+"&sz=w1000"):u;
 }
 function efSetCur(c){EF.cur=c;$("#efCurJ").classList.toggle("on",c==="JPY");$("#efCurR").classList.toggle("on",c==="MYR");expRecalc();}
-function efSetCat(c){EF.cat=c;document.querySelectorAll(".efcat").forEach(b=>b.classList.toggle("on",b.dataset.c===c));}
+function efSetCat(c){
+  EF.cat=c;EF.catTouched=true;EF.catWhy="";
+  document.querySelectorAll(".efcat").forEach(b=>b.classList.toggle("on",b.dataset.c===c));
+  const w=$("#efCatWhy");if(w)w.classList.add("hidden");
+}
 function efSetDay(d){EF.day=d;document.querySelectorAll(".efday").forEach(b=>b.classList.toggle("on",b.dataset.d===String(d)));}
 function efSetSplit(s){EF.split=s;$("#efSpE").classList.toggle("on",s==="equal");$("#efSpC").classList.toggle("on",s==="custom");
   document.querySelectorAll(".efamt").forEach(i=>i.classList.toggle("hidden",s!=="custom"));
