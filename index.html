@@ -470,6 +470,17 @@ nav{position:fixed;bottom:0;left:0;right:0;max-width:520px;margin:0 auto;
   color:var(--navy);background:var(--accent-soft);border-radius:9px;
   padding:8px 10px;margin-top:8px;}
 .cat-why i{font-size:14px;flex:0 0 auto;margin-top:1px;}
+.allfmt{display:flex;margin:0 0 10px;}
+.allfmt button{flex:1;}
+/* jadual ringkasan satu muka — padat tetapi masih boleh dibaca di kaunter */
+.sim-tbl{width:100%;border-collapse:collapse;font-size:12.5px;}
+.sim-tbl th{text-align:left;font-size:10px;font-weight:800;text-transform:uppercase;
+  letter-spacing:.7px;color:#666;padding:4px 6px 6px;border-bottom:2px solid #1a1a1a;}
+.sim-tbl td{vertical-align:top;padding:8px 6px;border-bottom:1px solid #e5e2da;line-height:1.45;}
+.sim-tbl tr:last-child td{border-bottom:none;}
+.sim-tbl .sd{width:92px;white-space:nowrap;}
+.sim-tbl .ss{width:42%;}
+.sim-tbl .sp{color:#333;}
 .doc-e{width:38px;text-align:right;padding-left:6px !important;}
 .doc-e .mini{padding:3px 7px;display:inline-flex;}
 .daytab.wide{min-width:88px;}
@@ -480,6 +491,8 @@ nav{position:fixed;bottom:0;left:0;right:0;max-width:520px;margin:0 auto;
   .no-print{display:none !important;}
   .doc-page{max-width:none;margin:0;padding:0;box-shadow:none;border-radius:0;font-size:11pt;}
   .doc-day{margin-bottom:14px;}
+  .sim-tbl{font-size:9.5pt;}
+  .sim-tbl tr{page-break-inside:avoid;break-inside:avoid;}
 }
 
 /* kad ringkas Today */
@@ -1710,9 +1723,17 @@ function renderTrip(){
       return `<button class="daytab ${d===String(curDay)?'on':''}" onclick="setDay('${jsq(d)}')">Day ${esc(d)}<br><span style="font-size:10px;opacity:.8">${esc(wd?wd+" ":"")}${esc(dt?dt.date:'')}</span></button>`;
     }).join("");
   if(curDay==="all"){
+    // Two renderings of the same rows: the detailed day-by-day document
+    // (editable in admin mode) and a one-page summary for immigration —
+    // day, overnight address in full, and the places visited in brief.
+    const fmt=allFmt();
     $("#tripBody").innerHTML=
-      `<div class="doc-page inapp">${summaryHTML(ADMIN)}</div>
-       <button class="mini" style="margin:12px auto 0;padding:10px 16px" onclick="showSummary()"><i class="ti ti-printer"></i> Print / save as PDF</button>`;
+      `<span class="seg allfmt">
+         <button class="${fmt==='det'?'on':''}" onclick="setAllFmt('det')">Detailed</button>
+         <button class="${fmt==='sim'?'on':''}" onclick="setAllFmt('sim')">Simplified</button>
+       </span>
+       <div class="doc-page inapp">${fmt==='sim'?simpleHTML():summaryHTML(ADMIN)}</div>
+       <button class="mini" style="margin:12px auto 0;padding:10px 16px" onclick="showSummary('${fmt}')"><i class="ti ti-printer"></i> Print / save as PDF</button>`;
     return;
   }
   const list=it.filter(r=>String(r.day)===String(curDay));
@@ -1928,13 +1949,60 @@ function summaryHTML(edit){
   h+=`<div class="doc-foot">Generated from the live trip sheet · times may still be adjusted</div>`;
   return h;
 }
-function showSummary(){
+// Format pilihan untuk paparan "All days" — diingat antara sesi.
+function allFmt(){try{return localStorage.getItem("knm_allfmt")==="sim"?"sim":"det";}catch(e){return "det";}}
+function setAllFmt(f){try{localStorage.setItem("knm_allfmt",f);}catch(e){}renderTrip();}
+// Ringkasan satu muka: sehari satu baris — hari & tarikh, penginapan malam itu
+// dengan ALAMAT PENUH, dan tempat dilawati secara ringkas. Untuk imigresen.
+function simpleHTML(){
+  const it=rows("Itinerary");
+  const days=[];
+  it.forEach(r=>{
+    const k=String(r.day);
+    let d=days.find(x=>x.day===k);
+    if(!d){d={day:k,date:r.date,rows:[]};days.push(d);}
+    d.rows.push(r);
+  });
+  const w=tripWindow();
+  let h=`<div class="doc-head">
+      <h1>Japan Trip — Summary</h1>
+      <div class="doc-sub">${esc(infoVal("Dates")||(w.d1+"–"+w.d2+" "+MON_FULL[w.mo]+" "+w.yr))}${infoVal("Travellers")?" · "+esc(infoVal("Travellers")):""}</div>`;
+  const outb=infoVal("Outbound"),retn=infoVal("Return");
+  if(outb)h+=`<div class="doc-sub">Arrival flight: ${esc(outb.replace(/->/g,"→"))}</div>`;
+  if(retn)h+=`<div class="doc-sub">Departure flight: ${esc(retn.replace(/->/g,"→"))}</div>`;
+  h+=`</div>
+    <table class="sim-tbl">
+      <tr><th>Day</th><th>Overnight accommodation</th><th>Places visited</th></tr>`;
+  days.forEach(d=>{
+    const wd=weekdayOf(d.date,true);
+    const stay=overnightFor(d.date);
+    // Tempat sahaja, ringkas: buang perhentian pengangkutan dan hotel supaya
+    // yang tinggal ialah apa yang orang itu benar-benar lawati hari itu.
+    const seen={},places=[];
+    d.rows.forEach(r=>{
+      const ty=String(r.type||"").toLowerCase();
+      if(ty==="transport"||ty==="flight"||ty==="hotel")return;
+      const l=String(r.location||"").trim();
+      if(!l||seen[l])return;
+      seen[l]=1;places.push(l);
+    });
+    h+=`<tr>
+      <td class="sd"><b>Day ${esc(d.day)}</b><br>${esc(wd)}<br>${esc(longDate(d.date))}</td>
+      <td class="ss">${stay?`<b>${esc(stay.name)}</b><br>${esc(stay.address||"")}`:"—"}</td>
+      <td class="sp">${places.length?esc(places.slice(0,5).join(" · ")):"In transit"}</td>
+    </tr>`;
+  });
+  h+=`</table>
+    <div class="doc-foot">Generated from the live trip sheet</div>`;
+  return h;
+}
+function showSummary(fmt){
   const el=$("#printDoc");if(!el)return;
   el.innerHTML=`<div class="doc-bar no-print">
       <button class="mbtn ghost" onclick="closeSummary()"><i class="ti ti-x"></i> Close</button>
       <button class="mbtn primary" onclick="window.print()"><i class="ti ti-printer"></i> Print / Save as PDF</button>
     </div>
-    <div class="doc-page">${summaryHTML(false)}</div>`;
+    <div class="doc-page">${fmt==="sim"?simpleHTML():summaryHTML(false)}</div>`;
   el.classList.remove("hidden");
   document.body.classList.add("printing");
   el.scrollTop=0;
