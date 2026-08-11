@@ -470,6 +470,13 @@ nav{position:fixed;bottom:0;left:0;right:0;max-width:520px;margin:0 auto;
   color:var(--navy);background:var(--accent-soft);border-radius:9px;
   padding:8px 10px;margin-top:8px;}
 .cat-why i{font-size:14px;flex:0 0 auto;margin-top:1px;}
+/* cip status pindahan — Pending kuning, Done hijau */
+.st-chip{display:inline-block;font-size:10px;font-weight:800;letter-spacing:.4px;text-transform:uppercase;
+  padding:2px 7px;border-radius:8px;vertical-align:middle;margin-left:5px;}
+.st-chip.pend{background:var(--amberbg);color:var(--amber);}
+.st-chip.done{background:var(--greenbg);color:var(--green);}
+.stbtn{flex:0 0 auto;padding:6px 10px;display:inline-flex;align-items:center;gap:4px;font-size:12px;}
+.stbtn.ok{color:var(--green);font-weight:700;}
 .curbar{display:flex;align-items:center;gap:9px;margin:0 0 9px;}
 .curbar .seg{flex:0 0 auto;}
 .curbar .plbl{font-size:12px;color:var(--muted);font-weight:700;text-transform:uppercase;letter-spacing:.4px;}
@@ -2494,17 +2501,37 @@ function renderMoney(){
     mine='<div class="sect-label">Me</div><div class="card">';
     if(!iPay.length&&!iGet.length)
       mine+='<div class="binfo">You are settled with everyone.</div>';
-    iPay.forEach(x=>{mine+=`<div class="balrow"><span>You pay <b>${esc(x.to)}</b></span><span class="neg">${rm2(x.amt)}</span></div>`;});
-    iGet.forEach(x=>{mine+=`<div class="balrow"><span><b>${esc(x.from)}</b> pays you</span><span class="pos">${rm2(x.amt)}</span></div>`;});
+    // Setiap pindahan tertunggak berlabel "Pending" — peringatan lembut yang
+    // semua orang nampak, supaya tiada siapa perlu segan-segan menuntut.
+    // Butang Done ditekan sendiri oleh pembayar selepas transfer; tidak wajib.
+    iPay.forEach(x=>{mine+=`<div class="balrow"><span>You pay <b>${esc(x.to)}</b> <span class="st-chip pend">Pending</span></span>
+      <span class="neg">${rm2(x.amt)}</span>
+      <button class="mini stbtn" onclick="showPayQR('${jsq(x.to)}',${x.amt})"><i class="ti ti-qrcode"></i></button>
+      <button class="mini stbtn ok" onclick="markSettled('${jsq(me)}','${jsq(x.to)}',${x.amt})"><i class="ti ti-check"></i> Done</button></div>`;});
+    iGet.forEach(x=>{mine+=`<div class="balrow"><span><b>${esc(x.from)}</b> pays you <span class="st-chip pend">Pending</span></span><span class="pos">${rm2(x.amt)}</span></div>`;});
+    if(iPay.length)mine+='<div class="binfo" style="margin-top:6px">Once you have transferred, please tap <b>Done</b> so the list stays current.</div>';
     mine+='</div>';
+  }
+  // Pindahan yang dah selesai kekal kelihatan dengan "Done" hijau — nampak
+  // siapa dah bayar tanpa perlu bertanya.
+  const settled=exp.filter(r=>String(r.category)==="Settlement");
+  let doneHtml="";
+  if(settled.length){
+    doneHtml='<div class="sect-label">Completed transfers</div><div class="card">';
+    settled.slice(-6).reverse().forEach(r=>{
+      const m2=String(r.split_with||"").match(/^([^=]+)=/);
+      const to=m2?m2[1].trim():"";
+      doneHtml+=`<div class="balrow"><span>${esc(r.paid_by)} <span style="color:var(--hint)">&rarr;</span> ${esc(to)} <span class="st-chip done">Done</span></span><span>${rm2(Number(r.amount_rm)||0)}</span></div>`;
+    });
+    doneHtml+='</div>';
   }
   let settleHtml=mine+'<div class="sect-label">Everyone · fewest transfers</div>';
   if(!sug.length)settleHtml+='<div class="rem-item soft"><i class="ti ti-confetti"></i><span>All settled. No outstanding balances.</span></div>';
   else sug.forEach(s=>{
-    settleHtml+=`<div class="settle-line"><span class="who">${esc(s.from)} <span style="color:var(--hint)">&rarr;</span> ${esc(s.to)}</span>
+    settleHtml+=`<div class="settle-line"><span class="who">${esc(s.from)} <span style="color:var(--hint)">&rarr;</span> ${esc(s.to)} <span class="st-chip pend">Pending</span></span>
       <span class="amt">${rm2(s.amt)}</span>
       <button class="mini" style="flex:0 0 auto;padding:6px 10px" onclick="showPayQR('${jsq(s.to)}',${s.amt})"><i class="ti ti-qrcode"></i></button>
-      <button class="mini" style="flex:0 0 auto;padding:6px 10px" onclick="markSettled('${jsq(s.from)}','${jsq(s.to)}',${s.amt})"><i class="ti ti-check" style="color:var(--green)"></i></button>
+      <button class="mini stbtn ok" onclick="markSettled('${jsq(s.from)}','${jsq(s.to)}',${s.amt})"><i class="ti ti-check"></i> Done</button>
     </div>`;
   });
   let balHtml='<div class="sect-label">Net balance</div><div class="card">';
@@ -2532,7 +2559,7 @@ function renderMoney(){
   el.innerHTML=`<div class="eyebrow">Expenses · ¥1 = RM${fxRate()}${fxIsLive()?" · live":""}</div>
     ${meHtml}${stats}
     <button class="bigbtn" style="background:var(--brand1)" onclick="openExpenseForm()"><i class="ti ti-plus"></i>Add expense</button>
-    ${settleHtml}${balHtml}
+    ${settleHtml}${doneHtml}${balHtml}
     <div class="link-row" style="margin-top:14px" onclick="showQRs()"><i class="ti ti-qrcode" style="color:#534AB7"></i><span>Member payment QR codes</span><i class="ti ti-chevron-right" style="color:var(--hint)"></i></div>
     ${listHtml}
     <div class="binfo" style="margin-top:10px;text-align:center">No money passes through this application. Payments are made directly (DuitNow or cash); this serves as the ledger and split calculator.</div>`;
