@@ -470,6 +470,9 @@ nav{position:fixed;bottom:0;left:0;right:0;max-width:520px;margin:0 auto;
   color:var(--navy);background:var(--accent-soft);border-radius:9px;
   padding:8px 10px;margin-top:8px;}
 .cat-why i{font-size:14px;flex:0 0 auto;margin-top:1px;}
+.curbar{display:flex;align-items:center;gap:9px;margin:0 0 9px;}
+.curbar .seg{flex:0 0 auto;}
+.curbar .plbl{font-size:12px;color:var(--muted);font-weight:700;text-transform:uppercase;letter-spacing:.4px;}
 .allfmt{display:flex;margin:0 0 10px;}
 .allfmt button{flex:1;}
 /* jadual ringkasan satu muka — padat tetapi masih boleh dibaca di kaunter */
@@ -2356,6 +2359,9 @@ async function lockSubmit(){
   }
 }
 function expensesAll(){return rows("Expenses").filter(r=>r.id);}
+// Mata wang paparan untuk petak statistik — diingat antara sesi.
+function moneyCur(){try{return localStorage.getItem("knm_moneycur")==="JPY"?"JPY":"MYR";}catch(e){return "MYR";}}
+function setMoneyCur(c){try{localStorage.setItem("knm_moneycur",c);}catch(e){}renderMoney();}
 function moneyReady(){return !!(DATA.Expenses&&DATA.Expenses.length)&&!!(DATA.Members&&DATA.Members.length);}
 function rm2(v){return "RM"+(Math.round(v*100)/100).toLocaleString(undefined,{minimumFractionDigits:2,maximumFractionDigits:2});}
 
@@ -2458,14 +2464,27 @@ function renderMoney(){
     <div class="chiprow">${names.map(n=>`<button class="daytab ${n===me?'on':''}" onclick="meSet('${jsq(n)}')">${esc(n)}</button>`).join("")}</div>`;
   let myShare=0;real.forEach(r=>{const sh=splitShares(r,names);myShare+=sh[me]||0;});
   const myNet=net[me]||0;
-  const stats=`<div class="metrics">
-      <div class="metric"><div class="lbl">Total trip spend</div><div class="num" style="font-size:17px">${rm2(totRM)}</div></div>
-      <div class="metric"><div class="lbl">My share</div><div class="num" style="font-size:17px">${me?rm2(myShare):"—"}</div></div>
+  // Paparan RM atau ¥, satu suis untuk keempat-empat petak. Buku kekal dalam
+  // RM; paparan ¥ ialah penukaran pada kadar HARI INI (ditanda ≈), sebab
+  // setiap baris asal dikunci pada kadarnya sendiri dan tiada satu jumlah ¥
+  // yang "tepat" bila entri bercampur mata wang.
+  const mc=moneyCur(),dsp=v=>mc==="JPY"?"≈ ¥"+Math.round(v/fxRate()).toLocaleString():rm2(v);
+  const stats=`<div class="curbar">
+      <span class="plbl">Show in</span>
+      <span class="seg">
+        <button class="${mc==='MYR'?'on':''}" onclick="setMoneyCur('MYR')">RM</button>
+        <button class="${mc==='JPY'?'on':''}" onclick="setMoneyCur('JPY')">¥ Yen</button>
+      </span>
     </div>
     <div class="metrics">
-      <div class="metric"><div class="lbl">Owed to me</div><div class="num" style="font-size:17px;color:var(--green)">${me?rm2(Math.max(0,myNet)):"—"}</div></div>
-      <div class="metric"><div class="lbl">I owe</div><div class="num" style="font-size:17px;color:var(--red)">${me?rm2(Math.max(0,-myNet)):"—"}</div></div>
-    </div>`;
+      <div class="metric"><div class="lbl">Total trip spend</div><div class="num" style="font-size:17px">${dsp(totRM)}</div></div>
+      <div class="metric"><div class="lbl">My share</div><div class="num" style="font-size:17px">${me?dsp(myShare):"—"}</div></div>
+    </div>
+    <div class="metrics">
+      <div class="metric"><div class="lbl">Owed to me</div><div class="num" style="font-size:17px;color:var(--green)">${me?dsp(Math.max(0,myNet)):"—"}</div></div>
+      <div class="metric"><div class="lbl">I owe</div><div class="num" style="font-size:17px;color:var(--red)">${me?dsp(Math.max(0,-myNet)):"—"}</div></div>
+    </div>
+    ${mc==="JPY"?`<div class="binfo" style="margin:-4px 0 8px">Converted at today's rate (¥1 = RM${fxRate()}). Settlement is always in RM.</div>`:""}`;
   const sug=settleSuggest();
   // Ringkasan peribadi dahulu: soalan sebenar orang ialah "aku hutang siapa,
   // siapa hutang aku" — bukan pelan pemindahan seluruh kumpulan.
