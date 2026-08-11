@@ -477,6 +477,7 @@ nav{position:fixed;bottom:0;left:0;right:0;max-width:520px;margin:0 auto;
 .st-chip.done{background:var(--greenbg);color:var(--green);}
 .stbtn{flex:0 0 auto;padding:6px 10px;display:inline-flex;align-items:center;gap:4px;font-size:12px;}
 .stbtn.ok{color:var(--green);font-weight:700;}
+.src-sub{display:block;font-weight:400;color:var(--hint);font-size:11px;margin-top:1px;}
 .curbar{display:flex;align-items:center;gap:9px;margin:0 0 9px;}
 .curbar .seg{flex:0 0 auto;}
 .curbar .plbl{font-size:12px;color:var(--muted);font-weight:700;text-transform:uppercase;letter-spacing:.4px;}
@@ -1461,7 +1462,10 @@ function showCurrency(){
       <div style="display:flex;gap:7px;margin:2px 0 12px;flex-wrap:wrap">
         ${[1000,3000,5000,10000].map(v=>`<button class="daytab" onclick="cvtSet(${v})">¥${v.toLocaleString()}</button>`).join("")}
       </div>
-      <div class="link-row" style="margin-bottom:10px" onclick="openLink('https://wise.com/gb/currency-converter/jpy-to-myr-rate')"><i class="ti ti-external-link" style="color:#0F6E56"></i><span>Compare on Wise</span><i class="ti ti-chevron-right" style="color:var(--hint)"></i></div>
+      <div class="sect-label">Source &amp; verification</div>
+      <div class="link-row" onclick="openLink('https://www.exchangerate-api.com/')"><i class="ti ti-database" style="color:var(--navy2)"></i><span>ExchangeRate-API (open access)<br><span class="src-sub">Mid-market rate used by this app${fxIsLive()?"":" — currently offline, using the rate in the Info tab"}</span></span><i class="ti ti-external-link" style="color:var(--hint)"></i></div>
+      <div class="link-row" onclick="openLink('https://wise.com/gb/currency-converter/jpy-to-myr-rate')"><i class="ti ti-rosette-discount-check" style="color:#0F6E56"></i><span>Wise — JPY to MYR<br><span class="src-sub">Independent mid-market reference to verify against</span></span><i class="ti ti-external-link" style="color:var(--hint)"></i></div>
+      <div class="link-row" style="margin-bottom:10px" onclick="openLink('https://open.er-api.com/v6/latest/JPY')"><i class="ti ti-code" style="color:var(--hint)"></i><span>Exact data used by this screen<br><span class="src-sub">Raw response — see the MYR field</span></span><i class="ti ti-external-link" style="color:var(--hint)"></i></div>
       <div class="modal-row"><button class="mbtn ghost" onclick="closeModal()">Close</button></div>
     </div></div>`;
 }
@@ -1505,9 +1509,21 @@ async function showPrayer(){
   }else{
     try{
       const t=await timingsFor(lat,lng,jn);
-      html=`<div class="sect-label" style="margin-top:0">${esc(loc)} · JST</div>`+prayTable(t)+
+      const inMY=isMyRow(cur);
+      const dd=String(jn.d).padStart(2,"0")+"-"+String(jn.mo+1).padStart(2,"0")+"-"+jn.y;
+      const apiUrl="https://api.aladhan.com/v1/timings/"+dd+"?latitude="+lat+"&longitude="+lng+"&method="+PRAYER_METHOD;
+      html=`<div class="sect-label" style="margin-top:0">${esc(loc)} · ${inMY?"MYT":"JST"}</div>`+prayTable(t)+
         `<div class="link-row" style="margin-top:12px" onclick="openLink('${mapsSearch("mosque musholla near "+loc)}')"><i class="ti ti-building-mosque" style="color:#0F6E56"></i><span>Mosques and prayer rooms nearby</span><i class="ti ti-external-link" style="color:var(--hint)"></i></div>`+
-        `<div class="binfo" style="margin-top:8px">Method: Muslim World League · times follow the coordinates of the current stop, and update as the trip moves.</div>`;
+        // Setiap angka mesti boleh dijejak ke sumbernya dan disemak di tempat
+        // lain — bukan "percaya sahaja app ini".
+        `<div class="sect-label">Source &amp; verification</div>
+        <div class="link-row" onclick="openLink('https://aladhan.com/prayer-times-api')"><i class="ti ti-database" style="color:var(--navy2)"></i><span>AlAdhan · Islamic Network<br><span class="src-sub">Calculation service used by this app · Muslim World League method</span></span><i class="ti ti-external-link" style="color:var(--hint)"></i></div>
+        ${inMY
+          ?`<div class="link-row" onclick="openLink('https://www.e-solat.gov.my/')"><i class="ti ti-rosette-discount-check" style="color:#0F6E56"></i><span>e-Solat JAKIM<br><span class="src-sub">Official Malaysian source — verify while in Malaysia</span></span><i class="ti ti-external-link" style="color:var(--hint)"></i></div>`
+          :`<div class="link-row" onclick="openLink('https://tokyocamii.org/prayer-times/')"><i class="ti ti-rosette-discount-check" style="color:#0F6E56"></i><span>Tokyo Camii — official timetable<br><span class="src-sub">Japan's largest mosque — verify against the local mosque</span></span><i class="ti ti-external-link" style="color:var(--hint)"></i></div>`}
+        <div class="link-row" onclick="openLink('https://www.timeanddate.com/sun/@${lat},${lng}')"><i class="ti ti-sunset-2" style="color:#d69a3a"></i><span>Sunrise &amp; sunset — timeanddate.com<br><span class="src-sub">Verify for these exact coordinates</span></span><i class="ti ti-external-link" style="color:var(--hint)"></i></div>
+        <div class="link-row" onclick="openLink('${apiUrl}')"><i class="ti ti-code" style="color:var(--hint)"></i><span>Exact data used by this screen<br><span class="src-sub">Raw response for ${esc(String(lat))}, ${esc(String(lng))} on ${esc(dd)}</span></span><i class="ti ti-external-link" style="color:var(--hint)"></i></div>
+        <div class="binfo" style="margin-top:8px">Times are computed for the coordinates of the current stop and update as the trip moves. Where a local mosque publishes its own timetable, the mosque's announcement takes precedence.</div>`;
     }catch(e){
       html='<div class="empty">Prayer times could not be retrieved. An internet connection is required.</div>';
     }
