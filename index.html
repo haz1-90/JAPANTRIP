@@ -2006,10 +2006,14 @@ const ME_KEY="knm_me", EXPPIN_KEY="knm_exp_pin", MEPIN_KEY="knm_me_pin", WELCOME
 // Nama sesi ini sahaja (admin tak simpan nama dalam localStorage) — supaya
 // sapaan tetap "Hi Admin" dan butang Lock tetap nampak.
 let WHO_NAME="", VIEW_ONLY=false, NETFAIL_SEEN=false;
-const CATS=[["Transport","🚆"],["Accommodation","🏨"],["Food","🍜"],["Activities","🎫"],["Shopping","🛍️"],["Other","💠"]];
+// Enam butang sahaja — cukup untuk tahu duit pergi ke mana, tanpa serabut.
+// Penginapan TIADA di sini dengan sengaja: keenam-enam hotel dibayar awal
+// sebelum trip, jadi ia tak pernah jadi belanja harian. Parking & tol pula
+// memang berlaku hampir setiap hari sebab ada kereta sewa.
+const CATS=[["Food","🍜"],["Transport","🚆"],["Parking","🅿️"],["Shopping","🛍️"],["Activities","🎫"],["Other","💠"]];
 const CAT_ICON=Object.fromEntries(CATS);CAT_ICON["Settlement"]="🤝";
 // keep the earlier Malay labels mapped so rows written before the rename still show an icon
-Object.assign(CAT_ICON,{Hotel:"🏨",Makan:"🍜",Aktiviti:"🎫",Lain:"💠"});
+Object.assign(CAT_ICON,{Hotel:"🏨",Accommodation:"🏨",Makan:"🍜",Aktiviti:"🎫",Lain:"💠"});
 function meGet(){try{return localStorage.getItem(ME_KEY)||"";}catch(e){return "";}}
 function meStore(n){try{localStorage.setItem(ME_KEY,n);}catch(e){}}
 // Kalau ahli tu ada PIN peribadi (server hantar penanda sahaja, bukan PIN),
@@ -2291,17 +2295,31 @@ function rm2(v){return "RM"+(Math.round(v*100)/100).toLocaleString(undefined,{mi
 function splitShares(r,names){
   const rate=Number(r.rate_to_rm)||1;
   const sw=String(r.split_with||"ALL").trim();
-  const shares={};
+  const totRM=Number(r.amount_rm)||((Number(r.amount)||0)*rate);
+  const weight={};
   if(String(r.split_type).toLowerCase()==="custom"||sw.includes("=")){
     sw.split(",").forEach(p=>{
       const m=p.split("=");const n=m[0].trim();const a=parseFloat(m[1]);
-      if(n&&!isNaN(a))shares[n]=(shares[n]||0)+a*rate;
+      if(n&&!isNaN(a))weight[n]=(weight[n]||0)+a;      // dalam mata wang entri
     });
   }else{
     const list=(sw.toUpperCase()==="ALL"||!sw)?names:sw.split(",").map(s=>s.trim()).filter(Boolean);
-    const tot=Number(r.amount_rm)||((Number(r.amount)||0)*rate);
-    if(list.length)list.forEach(n=>shares[n]=(shares[n]||0)+tot/list.length);
+    list.forEach(n=>weight[n]=(weight[n]||0)+1);
   }
+  // Agih `amount_rm` yang DIREKOD mengikut berat, dalam sen bulat, dan letak
+  // baki sen pada orang terakhir. Sisi kredit (pembayar didebitkan jumlah
+  // penuh) dan sisi debit (bahagian) mesti sepadan sen-demi-sen; kalau
+  // bahagian dikira sendiri daripada nombor tak dibundarkan, setiap baris
+  // tinggal beberapa perpuluhan sen dan buku takkan pernah tepat sifar.
+  const ks=Object.keys(weight),shares={};
+  const wsum=ks.reduce((a,k)=>a+weight[k],0);
+  if(!ks.length||!(wsum>0))return shares;
+  const target=Math.round(totRM*100);
+  let acc=0;
+  ks.forEach((k,i)=>{
+    const sen=(i===ks.length-1)?(target-acc):Math.round(weight[k]/wsum*target);
+    acc+=sen;shares[k]=sen/100;
+  });
   return shares;
 }
 // net balance per member: + = dihutang (patut terima), − = berhutang
@@ -2381,7 +2399,19 @@ function renderMoney(){
       <div class="metric"><div class="lbl">I owe</div><div class="num" style="font-size:17px;color:var(--red)">${me?rm2(Math.max(0,-myNet)):"—"}</div></div>
     </div>`;
   const sug=settleSuggest();
-  let settleHtml='<div class="sect-label">Settlement · fewest transfers</div>';
+  // Ringkasan peribadi dahulu: soalan sebenar orang ialah "aku hutang siapa,
+  // siapa hutang aku" — bukan pelan pemindahan seluruh kumpulan.
+  let mine="";
+  if(me){
+    const iPay=sug.filter(x=>x.from===me),iGet=sug.filter(x=>x.to===me);
+    mine='<div class="sect-label">Me</div><div class="card">';
+    if(!iPay.length&&!iGet.length)
+      mine+='<div class="binfo">You are settled with everyone.</div>';
+    iPay.forEach(x=>{mine+=`<div class="balrow"><span>You pay <b>${esc(x.to)}</b></span><span class="neg">${rm2(x.amt)}</span></div>`;});
+    iGet.forEach(x=>{mine+=`<div class="balrow"><span><b>${esc(x.from)}</b> pays you</span><span class="pos">${rm2(x.amt)}</span></div>`;});
+    mine+='</div>';
+  }
+  let settleHtml=mine+'<div class="sect-label">Everyone · fewest transfers</div>';
   if(!sug.length)settleHtml+='<div class="rem-item soft"><i class="ti ti-confetti"></i><span>All settled. No outstanding balances.</span></div>';
   else sug.forEach(s=>{
     settleHtml+=`<div class="settle-line"><span class="who">${esc(s.from)} <span style="color:var(--hint)">&rarr;</span> ${esc(s.to)}</span>
@@ -2429,15 +2459,23 @@ let EF={cur:"JPY",cat:"Food",day:null,split:"equal",imgData:null};
 // waktu makan. SENTIASA dipaparkan sebabnya, supaya orang nampak ia tekaan
 // dan boleh betulkan; tiada kategori ditukar diam-diam.
 const CAT_HINTS=[
-  ["Transport",/駅|新幹線|切符|乗車券|特急券|地下鉄|鉄道|タクシー|バス|高速|駐車|コインパーキング|suica|pasmo|icoca|\bjr\b|shinkansen|taxi|\bbus\b|subway|metro|railway|parking|toll|\bfare\b|\betc\b/i],
-  ["Accommodation",/ホテル|旅館|民宿|宿泊|素泊|hotel|ryokan|hostel|guest\s*house|\binn\b|lodging|homestay/i],
+  // Parking/tol diuji DULU: resit parking selalu ada perkataan pengangkutan
+  // juga, jadi kalau Transport diuji dahulu ia akan menelan semuanya.
+  ["Parking",/駐車|コインパーキング|パーキング|高速|通行料|料金所|\betc\b|parking|car\s*park|toll|expressway/i],
+  ["Transport",/駅|新幹線|切符|乗車券|特急券|地下鉄|鉄道|タクシー|バス|suica|pasmo|icoca|\bjr\b|shinkansen|taxi|\bbus\b|subway|metro|railway|\bfare\b/i],
+  // Resit hotel jarang berlaku semasa trip (semua bilik dibayar awal), tetapi
+  // kalau ada, "Other" lebih jujur daripada membiarkannya jatuh ke tekaan
+  // tempat dan tersalah jadi Activities.
+  ["Other",/ホテル|旅館|民宿|宿泊|素泊|hotel|ryokan|hostel|guest\s*house|lodging|homestay/i],
   ["Activities",/入場|入園|拝観|美術館|博物館|水族館|遊園地|温泉|admission|entrance|museum|aquarium|onsen|theme\s*park|\btour\b|ticket\s*(adult|child)/i],
   // Konbini diletak dalam Food dengan sengaja — dalam perjalanan, belian di
   // situ hampir selalu makanan/minuman. Sebab tu Food diuji sebelum Shopping.
   ["Food",/レストラン|食堂|ラーメン|定食|居酒屋|カフェ|喫茶|珈琲|弁当|飲食|寿司|焼肉|restaurant|cafe|coffee|ramen|sushi|bakery|dining|kitchen|makan|ローソン|ファミリーマート|セブン|コンビニ|lawson|familymart|7-?eleven|family\s*mart/i],
   ["Shopping",/ドン・?キホーテ|ユニクロ|ドラッグ|薬局|免税|百貨店|donki|don\s*quijote|uniqlo|daiso|pharmacy|duty\s*free|outlet|department\s*store|\bmart\b|\bstore\b/i]
 ];
-const STOP_CAT={food:"Food",hotel:"Accommodation",transport:"Transport",flight:"Transport",sightsee:"Activities"};
+// Perhentian hotel sengaja tiada: belanja di hotel biasanya sarapan atau
+// lain-lain, bukan bilik (bilik dah dibayar). Biar ia jatuh ke tekaan waktu.
+const STOP_CAT={food:"Food",transport:"Transport",flight:"Transport",sightsee:"Activities"};
 function guessCat(text){
   if(text){
     for(let i=0;i<CAT_HINTS.length;i++){
@@ -2460,6 +2498,25 @@ function guessCat(text){
 }
 // Nama tempat perhentian semasa (kosong sebelum trip bermula).
 function here0(){const r=tripActive()?pendingStops()[0]:null;return (r&&r.location)||"";}
+// Tempat-tempat pada hari itu, tanpa ulangan — jadi cadangan satu ketuk.
+function dayPlaces(day){
+  const seen={},out=[];
+  rows("Itinerary").forEach(r=>{
+    if(String(r.day)!==String(day))return;
+    const l=String(r.location||"").trim();
+    if(!l||seen[l])return;
+    seen[l]=1;out.push(l);
+  });
+  return out.slice(0,8);
+}
+// Jam semasa dalam zon perhentian semasa, format sama seperti Sheet.
+function nowClock(){
+  const cur=tripActive()?pendingStops()[0]:null;
+  const n=(cur&&isMyRow(cur))?mytNow():jstNow();
+  let h=n.h;const ap=h<12?"AM":"PM";h=h%12||12;
+  return h+":"+String(n.mi).padStart(2,"0")+" "+ap;
+}
+function efSetLoc(l){const i=$("#efLoc");if(i){i.value=l;i.focus();}}
 function catWhyLine(){
   return EF.catWhy
     ? `<div class="cat-why" id="efCatWhy"><i class="ti ti-wand"></i>Guessed: <b>${esc(EF.cat)}</b> — ${esc(EF.catWhy)}. Tap another if wrong.</div>`
@@ -2488,6 +2545,11 @@ function openExpenseForm(){
   const it=rows("Itinerary");
   const days=[...new Set(it.map(r=>String(r.day)))].filter(d=>d&&d!=="null");
   const dayChips=days.map(d=>`<button class="daytab efday ${String(EF.day)===d?'on':''}" data-d="${esc(d)}" onclick="efSetDay('${jsq(d)}')">D${esc(d)}</button>`).join("");
+  // Cadangan tempat: ambil terus dari perhentian hari itu dalam Sheet. Lebih
+  // tepat daripada GPS untuk tujuan ini — nama tempat sudah sedia betul, dan
+  // ia berfungsi tanpa talian dan tanpa kebenaran lokasi.
+  const locChips=dayPlaces(EF.day).map(l=>
+    `<button class="daytab efloc" onclick="efSetLoc('${jsq(l)}')">${esc(l)}</button>`).join("");
   const catChips=CATS.map(c=>`<button class="daytab efcat ${EF.cat===c[0]?'on':''}" data-c="${esc(c[0])}" onclick="efSetCat('${jsq(c[0])}')">${c[1]} ${esc(c[0])}</button>`).join("");
   const memRows=names.map(n=>`<div class="memchk">
       <input type="checkbox" class="efmem" value="${esc(n)}" checked onchange="expRecalc()">
@@ -2514,7 +2576,12 @@ function openExpenseForm(){
         ${catWhyLine()}
         <label class="field-label">Day</label>
         <div class="chiprow">${dayChips}</div>
-        <label class="field-label">Paid by</label>
+        <label class="field-label">Where</label>
+        <input id="efLoc" placeholder="e.g. Dotonbori" value="${esc(here.location||"")}">
+        ${locChips?`<div class="chiprow" style="margin-top:6px">${locChips}</div>`:""}
+        <label class="field-label">Time <span style="font-weight:400;color:var(--hint)">— optional, edit if you are entering this later</span></label>
+        <input id="efTime" placeholder="e.g. 7:30 PM" value="${esc(nowClock())}">
+        <label class="field-label">Paid by <span style="font-weight:400;color:var(--hint)">— whoever paid</span></label>
         <select id="efPayer">${names.map(n=>`<option ${n===EF.payer?"selected":""}>${esc(n)}</option>`).join("")}</select>
         <label class="field-label">Split</label>
         <span class="seg" style="margin-bottom:8px;display:inline-flex">
@@ -2714,13 +2781,24 @@ async function submitExpense(){
   const dayN=EF.day;
   const itRow=rows("Itinerary").find(r=>String(r.day)===String(dayN));
   const dateStr=itRow?itRow.date:"";
+  const loc=(($("#efLoc")&&$("#efLoc").value)||"").trim();
+  const tm=(($("#efTime")&&$("#efTime").value)||"").trim();
+  // Tulis ke lajur `location` / `time` kalau tab Expenses ada lajur itu.
+  // Kalau tiada, gabung ke dalam `notes` supaya maklumat TIDAK hilang —
+  // app berfungsi sepenuhnya tanpa perlu tambah lajur dalam Sheet dahulu.
+  const H=headers("Expenses");
+  const extra=[];
+  if(loc&&H.indexOf("location")===-1)extra.push(loc);
+  if(tm&&H.indexOf("time")===-1)extra.push(tm);
+  const typed=($("#efNotes").value||"").trim();
   const rec={
     id:"E"+Date.now().toString(36),
     date:dateStr,day:dayN,title:title,category:EF.cat,
     amount:amt,currency:EF.cur,rate_to_rm:rate,
     amount_rm:Math.round(amt*rate*100)/100,
     paid_by:$("#efPayer").value,split_type:EF.split,split_with:splitStr,
-    notes:($("#efNotes").value||"").trim(),
+    location:loc,time:tm,
+    notes:[extra.join(" · "),typed].filter(Boolean).join(" · "),
     receipt_link:($("#efReceipt")&&$("#efReceipt").value||"").trim()
   };
   const img=EF.imgData||null;
